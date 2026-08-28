@@ -445,8 +445,8 @@ route `POST /api/leads` · script `scripts/process-messages.ts`
 (`npm run messages`, cron every 15 min) · public pages `/`, `/alojamientos`,
 `/autos`, `/publicacion/[slug]` · panel `/panel` + `/panel/publicaciones/[id]` ·
 admin `/admin/{mensajes,inbox,analitica,propietarios,leads,plantillas,publicaciones,reservas,usuarios}` ·
-tests `scripts/verify-comms.ts` (111 checks, called by `verify-core`) plus 51
-new database-free checks in `verify-logic.ts`. `npm run verify` runs **213 + 328**.
+tests `scripts/verify-comms.ts` (115 checks, called by `verify-core`) plus 51
+new database-free checks in `verify-logic.ts`. `npm run verify` runs **213 + 332**.
 
 **Decisions/deviations made under §4.4** (none needed Anton):
 
@@ -573,7 +573,7 @@ npm install
 cp .env.example .env          # DATABASE_URL + SESSION_SECRET at minimum
 npm run db:migrate
 npm run seed                  # idempotent
-npm run verify                # 213 logic + 328 database checks, all must pass
+npm run verify                # 213 logic + 332 database checks, all must pass
 npm run dev
 ```
 
