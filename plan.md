@@ -187,6 +187,15 @@ _Filled incrementally, one section per phase. Must cover: schema deviations from
 
 ### Phase O-1 — Foundation (O1–O3)
 
+**2026-08-28 — O-1 merged.** Next.js 15 + Drizzle + MySQL app scaffolded with
+next-intl (es default, en under `/en`); the complete 33-table schema from §5.O2
+is in `src/db/schema.ts` and migrated; auth is iron-session + bcrypt with a
+four-role gate, owner scoping and cleaner magic links. `scripts/seed.ts` and
+`scripts/verify-core.ts` (33 checks) both pass, and `npm run build` succeeds
+with no environment set. Next phase (O-2) should start at `src/db/schema.ts`
+(`bookings`, `availability_blocks`, `extras`, `promo_codes`), `src/lib/money.ts`
+and `src/db/queries/` — the booking engine has no code yet, only its tables.
+
 **Local run**: see `README.md`. Short version: `npm install` → `cp .env.example .env` →
 `npm run db:migrate` → `npm run seed` → `npm run verify` → `npm run dev`.
 `scripts/` are run with tsx, which does **not** auto-load `.env`, so every script
