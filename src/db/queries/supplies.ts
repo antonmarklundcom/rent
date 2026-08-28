@@ -15,7 +15,6 @@ import { db } from "@/db";
 import { listings, supplies, supplyLevels } from "@/db/schema";
 import { logActivity } from "@/db/queries/activity";
 import type { Executor } from "@/db/queries/availability";
-import { inTransaction } from "@/db/queries/tx";
 import type { SessionUser } from "@/lib/auth-core";
 import { DomainError } from "@/lib/errors";
 
@@ -44,10 +43,6 @@ export async function upsertSupply(
     });
   const [row] = await executor.select().from(supplies).where(eq(supplies.name, name)).limit(1);
   return row!;
-}
-
-export async function listSupplies(executor: Executor = db) {
-  return executor.select().from(supplies).orderBy(asc(supplies.name));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -221,7 +216,7 @@ export async function adjustSupplyLevel(
 ): Promise<typeof supplyLevels.$inferSelect> {
   const step = Math.trunc(delta);
   if (step === 0) throw new DomainError("Indicá una cantidad distinta de cero", "invalid_amount");
-  return inTransaction(undefined, async (tx) => {
+  return db.transaction(async (tx) => {
     const [row] = await tx
       .select()
       .from(supplyLevels)

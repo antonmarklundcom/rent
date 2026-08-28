@@ -92,6 +92,14 @@ blocks a later phase.
   writes rows whose derived status changed, so it is cheap, but a fleet
   reminder never becomes `due` until somebody opens `/admin/flota` or the admin
   overview. Phase S-3 can add it to the hourly job next to `sync:ical`.
+- **Photo uploads are images only.** JPG/PNG/WEBP/HEIC — a renter who sends a
+  PDF of their licence cannot be filed without converting it first. Adding PDF
+  means a per-folder allow-list in `src/lib/uploads.ts` (documents yes, cleaning
+  photos no) plus a viewer that is not an `<img>`.
+- **No rate limit on the cleaner upload.** Anyone holding a valid magic token
+  can post 8 MB photos in a loop and fill `UPLOAD_DIR`. The token is per task
+  and only ever handed to the assigned person, so the exposure is small, but a
+  per-token cap belongs in S-3 alongside the deploy config.
 - **Owners cannot see cleaning, tickets or expenses yet.** Every O-3 action is
   admin-only; the read queries already take a `listingIds` filter for the
   owner-scoped panel that phase O-4 builds (§5.O10).

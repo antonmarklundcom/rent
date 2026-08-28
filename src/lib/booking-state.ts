@@ -13,7 +13,7 @@
  * booking is deliberately impossible — create a new one, so the price snapshot
  * and the promo accounting are re-derived rather than silently reused.
  */
-import { BOOKING_STATUSES, type BookingStatus } from "@/db/schema";
+import type { BookingStatus } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 
 export const BOOKING_TRANSITIONS: Record<BookingStatus, readonly BookingStatus[]> = {

@@ -14,6 +14,7 @@ import {
   listings,
   type DocumentStatus,
   type DocumentType,
+  type Vertical,
 } from "@/db/schema";
 import { logActivity } from "@/db/queries/activity";
 import type { Executor } from "@/db/queries/availability";
@@ -151,7 +152,7 @@ export async function listDocumentsForBooking(bookingId: number, executor: Execu
  * admin UI to explain WHY a confirm button will refuse.
  */
 export async function documentGateForBooking(
-  booking: { id: number; vertical: (typeof listings.vertical.enumValues)[number] },
+  booking: { id: number; vertical: Vertical },
   executor: Executor = db,
 ): Promise<DocumentGateResult> {
   const rows = await executor

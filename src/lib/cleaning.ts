@@ -11,11 +11,9 @@
  * `ready` gets a NEW task, so the history stays honest: "who said this was
  * clean, and when" is exactly the question a guest complaint raises.
  */
-import { CLEANING_STATUSES, type CleaningStatus, type Vertical } from "@/db/schema";
+import { type CleaningStatus, type Vertical } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 
-/** The flow, in order. Same values as the column's enum — never a second list. */
-export const CLEANING_STATUS_FLOW = CLEANING_STATUSES;
 export type { CleaningStatus };
 
 export type ChecklistItem = { key: string; label: string; done: boolean };

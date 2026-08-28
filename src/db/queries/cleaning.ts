@@ -12,7 +12,7 @@
  *
  * The status rules themselves live in the pure `src/lib/cleaning.ts`.
  */
-import { and, asc, count, desc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNull, lt, lte, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bookings,
@@ -25,13 +25,12 @@ import {
 import { logActivity } from "@/db/queries/activity";
 import type { Executor } from "@/db/queries/availability";
 import { consumeSuppliesForCleaning, type SupplyConsumption } from "@/db/queries/supplies";
-import { addPhoto, listPhotos } from "@/db/queries/photos";
+import { addPhoto } from "@/db/queries/photos";
 import { inTransaction } from "@/db/queries/tx";
 import type { SessionUser } from "@/lib/auth-core";
 import {
   applyChecklistUpdate,
   assertCleaningTransition,
-  checklistProgress,
   defaultChecklist,
   nextCleaningStatus,
   OPEN_CLEANING_STATUSES,
@@ -70,6 +69,20 @@ export async function createCleaningTask(
       throw new DomainError("La publicación no existe", "not_found", {
         listingId: input.listingId,
       });
+    }
+    if (input.assignedUserId != null) {
+      const [assignee] = await tx
+        .select({ role: users.role, isActive: users.isActive })
+        .from(users)
+        .where(eq(users.id, input.assignedUserId))
+        .limit(1);
+      if (!assignee || !assignee.isActive || assignee.role !== "cleaner") {
+        throw new DomainError(
+          "Sólo se pueden asignar tareas a personal de limpieza",
+          "invalid_amount",
+          { assignedUserId: input.assignedUserId },
+        );
+      }
     }
     return insertTask(tx, {
       listingId: listing.id,
@@ -367,6 +380,16 @@ export async function assignCleaner(
       if (!assignee || !assignee.isActive) {
         throw new DomainError("La persona asignada no existe", "not_found", { assignedUserId });
       }
+      // Only `cleaner` rows: the roster dropdown lists them, and
+      // `cleanerJobCounts` (payroll, #13) counts them. Letting an admin be
+      // assigned would put work on a roster nobody is ever paid from.
+      if (assignee.role !== "cleaner") {
+        throw new DomainError(
+          "Sólo se pueden asignar tareas a personal de limpieza",
+          "invalid_amount",
+          { assignedUserId, role: assignee.role },
+        );
+      }
     }
     await tx.update(cleaningTasks).set({ assignedUserId }).where(eq(cleaningTasks.id, task.id));
     await logActivity(
@@ -388,18 +411,6 @@ export async function assignCleaner(
   });
 }
 
-export async function addCleaningPhoto(
-  taskId: number,
-  url: string,
-  caption: string | null,
-  actor?: SessionUser | null,
-) {
-  return addPhoto(
-    { subjectType: "cleaning_task", subjectId: taskId, url, caption, uploadedBy: actor?.id ?? null },
-    db,
-  );
-}
-
 /* -------------------------------------------------------------------------- */
 /* Magic-link surface — a token addresses exactly one task and nothing else    */
 /* -------------------------------------------------------------------------- */
@@ -416,13 +427,6 @@ async function taskIdForToken(token: string): Promise<number> {
     .limit(1);
   if (!row) throw new DomainError("Este enlace no es válido", "not_found");
   return row.id;
-}
-
-export async function advanceTaskByToken(
-  token: string,
-  to: CleaningStatus,
-): Promise<AdvanceResult> {
-  return advanceCleaningTask(await taskIdForToken(token), to, null, { actorLabel: "magic_link" });
 }
 
 /** Advance one step along the flow — what the cleaner's single button does. */
@@ -463,28 +467,6 @@ export async function addPhotoByToken(token: string, url: string, caption: strin
 /* -------------------------------------------------------------------------- */
 /* Reads — roster (#13), detail, counts                                        */
 /* -------------------------------------------------------------------------- */
-
-export async function getTaskDetail(taskId: number, executor: Executor = db) {
-  const [row] = await executor
-    .select({
-      task: cleaningTasks,
-      listingTitle: listings.title,
-      listingVertical: listings.vertical,
-      ownerId: listings.ownerId,
-      assigneeName: users.name,
-      bookingReference: bookings.reference,
-      guestName: bookings.guestName,
-    })
-    .from(cleaningTasks)
-    .innerJoin(listings, eq(listings.id, cleaningTasks.listingId))
-    .leftJoin(users, eq(users.id, cleaningTasks.assignedUserId))
-    .leftJoin(bookings, eq(bookings.id, cleaningTasks.bookingId))
-    .where(eq(cleaningTasks.id, taskId))
-    .limit(1);
-  if (!row) return null;
-  const photos = await listPhotos("cleaning_task", taskId, executor);
-  return { ...row, photos, progress: checklistProgress(row.task.checklist) };
-}
 
 export type RosterFilter = {
   /** UTC day, `YYYY-MM-DD`. Omit for "everything still open". */

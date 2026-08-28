@@ -24,7 +24,7 @@ import type { Executor } from "@/db/queries/availability";
 import { inTransaction } from "@/db/queries/tx";
 import type { SessionUser } from "@/lib/auth-core";
 import { DomainError } from "@/lib/errors";
-import { addMoney, toMoney, toNumber } from "@/lib/money";
+import { toMoney, toNumber } from "@/lib/money";
 
 export type CreateExpenseInput = {
   listingId: number;
@@ -182,6 +182,42 @@ export async function upsertTicketExpense(
   return { expense, created: true, locked: false };
 }
 
+/**
+ * Drop the expense a ticket produced, because its cost was cleared.
+ *
+ * The counterpart to `upsertTicketExpense`: a ticket whose cost goes back to
+ * "unknown" must not leave a charge standing against the owner. An expense
+ * already stamped onto a statement is NOT deleted for the same reason it is
+ * not rewritten — that money was reported, and unreporting it silently would
+ * make a statement and the ledger disagree.
+ */
+export async function removeTicketExpense(
+  ticketId: number,
+  actor: SessionUser | null | undefined,
+  executor: Executor,
+): Promise<{ removed: boolean; locked: boolean }> {
+  const [existing] = await executor
+    .select()
+    .from(expenses)
+    .where(eq(expenses.maintenanceTicketId, ticketId))
+    .limit(1);
+  if (!existing) return { removed: false, locked: false };
+  if (existing.statementId !== null) return { removed: false, locked: true };
+
+  await executor.delete(expenses).where(eq(expenses.id, existing.id));
+  await logActivity(
+    {
+      entity: "expense",
+      entityId: existing.id,
+      action: "expense.removed_with_ticket_cost",
+      userId: actor?.id ?? null,
+      meta: { ticketId, amount: existing.amount, listingId: existing.listingId },
+    },
+    executor,
+  );
+  return { removed: true, locked: false };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Reads                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -249,14 +285,6 @@ export async function expenseTotalsByListing(
     total: toMoney(row.total ?? 0),
     count: Number(row.count ?? 0),
   }));
-}
-
-export async function expenseTotal(
-  filter: Pick<ExpenseFilter, "listingIds" | "from" | "to"> = {},
-  executor: Executor = db,
-): Promise<string> {
-  const totals = await expenseTotalsByListing(filter, executor);
-  return addMoney(...totals.map((row) => row.total));
 }
 
 export async function getExpensesForTicket(ticketId: number, executor: Executor = db) {

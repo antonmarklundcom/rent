@@ -17,11 +17,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
-  addCleaningPhoto,
   advanceCleaningTask,
   assignCleaner,
   createCleaningTask,
-  updateChecklist,
 } from "@/db/queries/cleaning";
 import { createExpense } from "@/db/queries/expenses";
 import { addTicketPhoto, createTicket, updateTicket } from "@/db/queries/maintenance";
@@ -30,10 +28,28 @@ import { ADMIN_ROLES } from "@/lib/auth-core";
 import { requireRole } from "@/lib/auth";
 import { CLEANING_STATUSES, EXPENSE_CATEGORIES, TICKET_STATUSES } from "@/db/schema";
 import { storeUpload } from "@/lib/uploads";
+import { DomainError } from "@/lib/errors";
 import { type FormState } from "@/lib/form-state";
 import { toFormState } from "@/app/actions/form";
 
 const OPS_PATHS = ["/admin", "/admin/limpieza", "/admin/mantenimiento"];
+
+/**
+ * `<input type="datetime-local">` sends a bare `YYYY-MM-DDTHH:mm` with no zone,
+ * and `new Date()` would read it in the SERVER's timezone. Everything in this
+ * app is stored and rendered in UTC (plan §9, O-1 judgment call 1), so the
+ * value is pinned to UTC here — otherwise a due time round-trips wrong the day
+ * the app runs anywhere but UTC.
+ */
+function parseFormDateTime(value: string): Date {
+  const trimmed = value.trim();
+  const hasZone = /(Z|[+-]\d{2}:?\d{2})$/.test(trimmed);
+  const parsed = new Date(hasZone ? trimmed : `${trimmed}Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new DomainError(`Fecha inválida: ${value}`, "invalid_range");
+  }
+  return parsed;
+}
 
 function revalidateOps() {
   for (const path of OPS_PATHS) revalidatePath(path);
@@ -62,8 +78,7 @@ export async function createCleaningTaskAction(
       dueBy: formData.get("dueBy") || null,
       notes: formData.get("notes") || null,
     });
-    const dueBy = parsed.dueBy ? new Date(parsed.dueBy) : null;
-    if (dueBy && Number.isNaN(dueBy.getTime())) throw new Error("Fecha inválida");
+    const dueBy = parsed.dueBy ? parseFormDateTime(parsed.dueBy) : null;
     const task = await createCleaningTask(
       {
         listingId: parsed.listingId,
@@ -124,19 +139,6 @@ export async function advanceCleaningTaskAction(
   });
 }
 
-export async function updateChecklistAction(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const user = await requireRole(ADMIN_ROLES);
-  return toFormState(async () => {
-    const taskId = z.coerce.number().int().positive().parse(formData.get("taskId"));
-    await updateChecklist(taskId, readChecklistUpdates(formData), user);
-    revalidateOps();
-    return "Checklist actualizado";
-  });
-}
-
 /**
  * Checklist keys arrive as `item:<key>` so they cannot collide with the form's
  * own fields. An unchecked box sends nothing, so the keys the page rendered are
@@ -150,21 +152,6 @@ function readChecklistUpdates(formData: FormData): Record<string, boolean> {
   const updates: Record<string, boolean> = {};
   for (const key of declared) updates[key] = formData.get(`item:${key}`) === "on";
   return updates;
-}
-
-export async function uploadCleaningPhotoAction(
-  _prev: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const user = await requireRole(ADMIN_ROLES);
-  return toFormState(async () => {
-    const taskId = z.coerce.number().int().positive().parse(formData.get("taskId"));
-    const caption = (formData.get("caption") as string | null)?.trim() || null;
-    const stored = await storeUpload(formData.get("photo") as File, "cleaning");
-    await addCleaningPhoto(taskId, stored.url, caption, user);
-    revalidateOps();
-    return "Foto agregada";
-  });
 }
 
 /* ---------------------------------------------------------- maintenance #6 */

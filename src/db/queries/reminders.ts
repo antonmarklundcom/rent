@@ -281,10 +281,3 @@ export async function listDueReminders(
   }));
 }
 
-export async function listRemindersForListing(listingId: number, executor: Executor = db) {
-  return executor
-    .select()
-    .from(vehicleReminders)
-    .where(eq(vehicleReminders.listingId, listingId))
-    .orderBy(asc(vehicleReminders.status), asc(vehicleReminders.dueDate));
-}

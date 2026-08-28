@@ -355,9 +355,9 @@ photo storage `src/lib/uploads.ts` + route `/api/uploads/[...path]` ·
 actions `src/app/actions/{operations,autos,cleaner}.ts` ·
 screens `/tarea/[token]` (rebuilt: checklist, camera upload, status advance),
 `/admin/limpieza`, `/admin/mantenimiento`, `/admin/flota`,
-`/admin/reservas/[id]` · tests `scripts/verify-operations.ts` (82 checks, called
+`/admin/reservas/[id]` · tests `scripts/verify-operations.ts` (88 checks, called
 by `verify-core`) plus 50 new database-free checks in `verify-logic.ts`.
-`npm run verify` runs 162 + 211.
+`npm run verify` runs 162 + 217.
 
 **The four chained flows (§3 groups A and C), all proven end to end**:
 checkout auto-creates the turnover task inside the booking's own transaction ·
@@ -415,6 +415,15 @@ owner cannot, and the override lands in `activity_log`.
     Odometer readings come from the latest inspection that carries one.
 11. **O-3 actions are admin-only.** Owners get scoped views in O-4's owner panel
     (§5.O10); every read query here already accepts a `listingIds` filter.
+
+**Found and fixed in the §4.8c pre-handoff audit**: clearing a ticket's cost
+left its expense standing, so an owner kept being billed for a charge the
+ticket no longer claimed — `removeTicketExpense` now deletes it in the same
+transaction (and refuses, like the edit path, once it is on a statement) ·
+`<input type="datetime-local">` was being read in the server's timezone rather
+than UTC · a cleaning task could be assigned to a non-`cleaner`, putting work
+on a roster payroll never counts · eleven speculative exports and thirteen dead
+imports pruned.
 
 **Seed additions**: booking `ALQ-SEED08` — a car rental left as an `inquiry`
 with a `pending` licence, so the document gate is demonstrable without touching

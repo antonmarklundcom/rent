@@ -21,8 +21,8 @@ import {
 } from "@/db/schema";
 import { logActivity } from "@/db/queries/activity";
 import type { Executor } from "@/db/queries/availability";
-import { upsertTicketExpense } from "@/db/queries/expenses";
-import { addPhoto, listPhotos } from "@/db/queries/photos";
+import { removeTicketExpense, upsertTicketExpense } from "@/db/queries/expenses";
+import { addPhoto } from "@/db/queries/photos";
 import { inTransaction } from "@/db/queries/tx";
 import type { SessionUser } from "@/lib/auth-core";
 import { DomainError } from "@/lib/errors";
@@ -224,6 +224,11 @@ export async function updateTicket(
       );
       expenseId = result.expense.id;
       expenseLocked = result.locked;
+    } else if (input.cost !== undefined) {
+      // The cost was cleared. Its expense goes with it, or the owner keeps
+      // being billed for a charge the ticket no longer claims.
+      const removal = await removeTicketExpense(ticket.id, actor, tx);
+      expenseLocked = removal.locked;
     }
 
     const [row] = await tx
@@ -281,29 +286,6 @@ export async function listTickets(
     )
     .orderBy(asc(maintenanceTickets.status), desc(maintenanceTickets.id))
     .limit(filter.limit ?? 200);
-}
-
-export async function getTicketDetail(ticketId: number, executor: Executor = db) {
-  const [row] = await executor
-    .select({
-      ticket: maintenanceTickets,
-      listingTitle: listings.title,
-      ownerId: listings.ownerId,
-      assigneeName: users.name,
-    })
-    .from(maintenanceTickets)
-    .innerJoin(listings, eq(listings.id, maintenanceTickets.listingId))
-    .leftJoin(users, eq(users.id, maintenanceTickets.assignedUserId))
-    .where(eq(maintenanceTickets.id, ticketId))
-    .limit(1);
-  if (!row) return null;
-  const photos = await listPhotos("maintenance_ticket", ticketId, executor);
-  const linked = await executor
-    .select()
-    .from(expenses)
-    .where(eq(expenses.maintenanceTicketId, ticketId))
-    .limit(1);
-  return { ...row, photos, expense: linked[0] ?? null };
 }
 
 export async function countOpenTickets(

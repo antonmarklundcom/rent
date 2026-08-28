@@ -6,12 +6,11 @@
  * bookings and any future importer go through these functions — nothing else
  * inserts into `bookings`.
  */
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bookingExtras,
   bookings,
-  carDetails,
   listings,
   owners,
   stayDetails,

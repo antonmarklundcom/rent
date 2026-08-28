@@ -384,6 +384,11 @@ export async function runOperationsChecks(r: CheckRunner): Promise<void> {
 
   await assignCleaner(turnover.id, fx.cleanerId, fx.adminUser);
   await r.throwsAsync(
+    "no se asigna una limpieza a alguien que no es personal de limpieza",
+    () => assignCleaner(turnover.id, fx.adminUser.id, fx.adminUser),
+    "invalid_amount",
+  );
+  await r.throwsAsync(
     "no se puede saltar de needed a ready",
     () => advanceCleaningTask(turnover.id, "ready", fx.adminUser),
     "invalid_transition",
@@ -528,6 +533,29 @@ export async function runOperationsChecks(r: CheckRunner): Promise<void> {
   ticketExpenses = await getExpensesForTicket(ticket.ticket.id);
   r.equal("el monto facturado queda intacto", ticketExpenses[0]?.amount, "180000.00");
   await db.update(expenses).set({ statementId: null }).where(eq(expenses.id, ticketExpenses[0]!.id));
+
+  const cleared = await updateTicket({ ticketId: ticket.ticket.id, cost: null }, fx.adminUser);
+  r.equal("borrar el costo borra su gasto", (await getExpensesForTicket(ticket.ticket.id)).length, 0);
+  r.equal("y no reporta un gasto vigente", cleared.expenseId, null);
+  await updateTicket({ ticketId: ticket.ticket.id, cost: "180000.00" }, fx.adminUser);
+  r.equal(
+    "volver a cargarlo lo recrea, sin duplicar",
+    (await getExpensesForTicket(ticket.ticket.id)).length,
+    1,
+  );
+
+  // A billed expense is frozen against deletion too, not just against edits.
+  const billed = (await getExpensesForTicket(ticket.ticket.id))[0]!;
+  await db.update(expenses).set({ statementId: 999_998 }).where(eq(expenses.id, billed.id));
+  const clearLocked = await updateTicket({ ticketId: ticket.ticket.id, cost: null }, fx.adminUser);
+  r.check("un gasto ya facturado tampoco se borra", clearLocked.expenseLocked);
+  r.equal(
+    "y sigue en la base",
+    (await getExpensesForTicket(ticket.ticket.id)).length,
+    1,
+  );
+  await db.update(expenses).set({ statementId: null }).where(eq(expenses.id, billed.id));
+  await updateTicket({ ticketId: ticket.ticket.id, cost: "180000.00" }, fx.adminUser);
 
   const listed = await listExpenses({ listingIds: [fx.stayId] });
   r.check(
