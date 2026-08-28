@@ -1,20 +1,19 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useTranslations } from "next-intl";
 import { requestBookingAction } from "@/app/actions/bookings";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/form-state";
 
 type Extra = { id: number; name: string; price: string; description: string | null };
 
 /**
- * The public booking-request form (plan §5.O11).
+ * The public booking-request form (plan §5.O11, restyled §6.S2).
  *
  * It produces an `inquiry` — which never holds dates (plan §9, O-2 decision 5).
  * The engine is what enforces availability, at confirmation; this form only
  * collects. `requestBookingAction` also stores the enquiry as a lead and offers
  * it to VenderCRM, so a failed CRM never costs the request.
- *
- * Ugly on purpose. Window 2 designs it (plan §6.S2).
  */
 export function BookingRequestForm({
   listingId,
@@ -25,6 +24,7 @@ export function BookingRequestForm({
   extras: Extra[];
   vertical: "stay" | "car";
 }) {
+  const t = useTranslations("booking");
   const [selected, setSelected] = useState<Record<number, number>>({});
 
   const [state, formAction, pending] = useActionState<FormState, FormData>(
@@ -44,101 +44,117 @@ export function BookingRequestForm({
           .map(([extraId, qty]) => ({ extraId: Number(extraId), qty })),
       });
       return result.ok
-        ? {
-            ok: true,
-            message: `¡Listo! Tu solicitud quedó registrada con el código ${result.data.reference}. Te escribimos para confirmar.`,
-          }
+        ? { ok: true, message: t("success", { reference: result.data.reference }) }
         : { ok: false, error: result.error };
     },
     EMPTY_FORM_STATE,
   );
 
+  const inputClass =
+    "rounded-sm border border-ink/15 bg-surface px-3 py-2.5 text-sm focus:border-accent focus:outline-none";
+  const labelClass = "flex flex-col gap-1 text-xs font-medium text-ink/60";
+
   return (
-    <form action={formAction} className="space-y-2 border border-neutral-300 p-3 text-sm">
-      <h3 className="font-medium">Pedí tu reserva</h3>
+    <form
+      action={formAction}
+      data-ev-loc="booking-form"
+      className="card--raised card--hair space-y-4 rounded-lg p-5 sm:p-6"
+    >
+      <h3 className="font-display text-xl">{t("title")}</h3>
       <div className="flex flex-wrap gap-3">
-        <label className="flex flex-col">
-          {vertical === "stay" ? "Check-in" : "Retiro"}
-          <input type="date" name="startAt" required className="border p-1" />
+        <label className={labelClass}>
+          {vertical === "stay" ? t("checkIn") : t("pickup")}
+          <input type="date" name="startAt" required className={inputClass} />
         </label>
-        <label className="flex flex-col">
-          {vertical === "stay" ? "Check-out" : "Devolución"}
-          <input type="date" name="endAt" required className="border p-1" />
+        <label className={labelClass}>
+          {vertical === "stay" ? t("checkOut") : t("dropoff")}
+          <input type="date" name="endAt" required className={inputClass} />
         </label>
         {vertical === "stay" && (
-          <label className="flex flex-col">
-            Huéspedes
-            <input type="number" name="guestCount" min={1} max={30} className="w-24 border p-1" />
+          <label className={labelClass}>
+            {t("guests")}
+            <input type="number" name="guestCount" min={1} max={30} className={`w-24 ${inputClass}`} />
           </label>
         )}
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <label className="flex flex-col">
-          Tu nombre
-          <input name="guestName" required minLength={2} className="border p-1" />
+        <label className={labelClass}>
+          {t("yourName")}
+          <input name="guestName" required minLength={2} className={inputClass} />
         </label>
-        <label className="flex flex-col">
+        <label className={labelClass}>
           WhatsApp
-          <input name="guestPhone" type="tel" placeholder="0981 123 456" className="border p-1" />
+          <input name="guestPhone" type="tel" placeholder="0981 123 456" className={inputClass} />
         </label>
-        <label className="flex flex-col">
-          Correo (opcional)
-          <input name="guestEmail" type="email" className="border p-1" />
+        <label className={labelClass}>
+          {t("emailOptional")}
+          <input name="guestEmail" type="email" className={inputClass} />
         </label>
       </div>
 
       {extras.length > 0 && (
-        <fieldset className="space-y-1">
-          <legend>Extras</legend>
-          {extras.map((extra) => (
-            <label key={extra.id} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={(selected[extra.id] ?? 0) > 0}
-                onChange={(event) =>
-                  setSelected((current) => ({
-                    ...current,
-                    [extra.id]: event.target.checked ? 1 : 0,
-                  }))
-                }
-              />
-              {extra.name} — {extra.price}
-              {extra.description ? ` (${extra.description})` : ""}
-            </label>
-          ))}
+        <fieldset className="space-y-2">
+          <legend className="mb-1 text-xs font-medium text-ink/60">{t("extras")}</legend>
+          <div className="flex flex-wrap gap-2">
+            {extras.map((extra) => {
+              const checked = (selected[extra.id] ?? 0) > 0;
+              return (
+                <label
+                  key={extra.id}
+                  className={`flex cursor-pointer items-center gap-2 rounded-sm border px-3 py-2 text-sm ${
+                    checked ? "border-accent bg-accent/10" : "border-ink/15"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="accent-accent"
+                    checked={checked}
+                    onChange={(event) =>
+                      setSelected((current) => ({
+                        ...current,
+                        [extra.id]: event.target.checked ? 1 : 0,
+                      }))
+                    }
+                  />
+                  {extra.name} — {extra.price}
+                  {extra.description ? ` (${extra.description})` : ""}
+                </label>
+              );
+            })}
+          </div>
         </fieldset>
       )}
 
-      <label className="flex flex-col">
-        Código promocional (opcional)
-        <input name="promoCode" className="border p-1" />
+      <label className={labelClass}>
+        {t("promoCode")}
+        <input name="promoCode" className={inputClass} />
       </label>
-      <label className="flex flex-col">
-        Consulta o comentario
-        <textarea name="notes" rows={3} className="border p-1" />
+      <label className={labelClass}>
+        {t("notes")}
+        <textarea name="notes" rows={3} className={inputClass} />
       </label>
 
       {state.error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="text-sm text-red-600">
           {state.error}
         </p>
       )}
       {state.message && (
-        <p role="status" className="text-green-700">
+        <p role="status" className="text-sm text-green-700">
           {state.message}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="rounded bg-neutral-900 px-3 py-2 text-white disabled:opacity-50"
+        data-ev="form_submit"
+        data-ev-loc="booking-form"
+        className="min-h-12 w-full rounded-sm bg-accent px-6 font-medium text-accent-ink transition-transform hover:-translate-y-0.5 disabled:opacity-50 sm:w-auto"
       >
-        {pending ? "Enviando…" : "Enviar solicitud"}
+        {pending ? t("sending") : t("submit")}
       </button>
-      <p className="text-xs text-neutral-500">
-        No es una reserva confirmada: te escribimos por WhatsApp para cerrarla.
-      </p>
+      <p className="text-xs text-ink/50">{t("disclaimer")}</p>
     </form>
   );
 }

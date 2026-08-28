@@ -211,6 +211,33 @@ export async function browseLocations(vertical: Vertical, executor: Executor = d
 }
 
 /**
+ * A location's own name plus its parent's, for the location-landing-page
+ * breadcrumb (plan §6.S2). Returns `null` for an unknown slug. Deliberately
+ * does not require a published listing itself — `browseListings` already
+ * refuses to render a page for a location with none, so a page never reaches
+ * this with a slug that has no public listings behind it.
+ */
+export async function getPublicLocation(slug: string, executor: Executor = db) {
+  const [row] = await executor
+    .select({ id: locations.id, name: locations.name, slug: locations.slug, parentId: locations.parentId })
+    .from(locations)
+    .where(eq(locations.slug, slug))
+    .limit(1);
+  if (!row) return null;
+
+  let parent: { id: number; name: string; slug: string } | null = null;
+  if (row.parentId) {
+    const [parentRow] = await executor
+      .select({ id: locations.id, name: locations.name, slug: locations.slug })
+      .from(locations)
+      .where(eq(locations.id, row.parentId))
+      .limit(1);
+    parent = parentRow ?? null;
+  }
+  return { ...row, parent };
+}
+
+/**
  * One public listing with its typed details, images and info base.
  *
  * Returns `null` for anything not `published` — the public detail page must

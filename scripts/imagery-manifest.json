@@ -1,0 +1,43 @@
+{
+  "vertical": "alquilar-com-py",
+  "track": "WARM CRAFT",
+  "note": "Written by phase S-1 (plan §6.S4). MCP image generation ran fine from this session, but fetching the result bytes from Higgsfield's CDN was blocked by this session's sandboxed egress policy (403 on any host outside the allowlist — confirmed with a live test generation and a direct curl of its result_url). A session with full network egress (the local Claude Code CLI, or a future cloud session with a broader policy) can run this manifest as-is: generate each prompt with the given model via generate_image_batch, download the four result URLs straight to the `file` paths under public/images/, no re-fetch pipeline needed since there is only one shared image per slot (plan already seeds `/images/placeholder-{vertical}.jpg`, not one file per listing).",
+  "images": [
+    {
+      "slot": "hero-bleed",
+      "file": "public/images/hero-home.jpg",
+      "alt": "Casa con piscina y auto estacionado al atardecer en un barrio residencial de Asunción, Paraguay",
+      "ratio": "4:3 (5:6 on desktop)",
+      "px": 2048,
+      "model": "nano_banana_2",
+      "prompt": "Warm golden-hour photograph of a modern Paraguayan house with a small pool and a parked sedan in the driveway, lush tropical garden, Asunción residential neighborhood, terracotta and cream tones, soft warm light, shallow depth of field, editorial real-estate photography, no people, no text, no watermark, no logos"
+    },
+    {
+      "slot": "hero-bleed",
+      "file": "public/images/hero-rent-car.jpg",
+      "alt": "Auto sedán moderno estacionado frente a una calle arbolada en Asunción",
+      "ratio": "4:3",
+      "px": 2048,
+      "model": "nano_banana_2",
+      "prompt": "Warm golden-hour photograph of a clean modern sedan parked on a tree-lined street in Asunción, Paraguay, warm terracotta and cream tones, soft daylight, editorial automotive photography, no people, no text, no license plate visible, no watermark, no logos"
+    },
+    {
+      "slot": "card-motif",
+      "file": "public/images/placeholder-stay.jpg",
+      "alt": "Interior luminoso de una sala de estar en un alojamiento en alquiler en Paraguay",
+      "ratio": "4:3",
+      "px": 1024,
+      "model": "nano_banana_2_lite",
+      "prompt": "Bright, warm interior photograph of a tidy living room in a Paraguayan rental home, cream walls, wood furniture, natural daylight through a window, warm terracotta accents, editorial real-estate photography, no people, no text, no watermark, no logos"
+    },
+    {
+      "slot": "card-motif",
+      "file": "public/images/placeholder-car.jpg",
+      "alt": "Auto en alquiler estacionado, listo para retirar",
+      "ratio": "4:3",
+      "px": 1024,
+      "model": "nano_banana_2_lite",
+      "prompt": "Clean photograph of a modern rental car parked in soft daylight, warm neutral background, editorial automotive photography, three-quarter angle, no people, no text, no visible license plate, no watermark, no logos"
+    }
+  ]
+}

@@ -5,8 +5,8 @@ import { browseListings, browseLocations } from "@/db/queries/listings";
 import { PROPERTY_TYPES, type PropertyType } from "@/db/schema";
 
 /**
- * Browse alojamientos (plan §5.O11). Filters are GET params so every filtered
- * view is a real URL — Sonnet adds canonicals and copy in Window 2 (§6.S2/S5).
+ * Browse alojamientos (plan §5.O11 → §6.S2 restyle). Filters are GET params so
+ * every filtered view is a real URL — S-2 (§6.S5) adds canonicals.
  */
 export default async function BrowseStaysPage({
   params,
@@ -22,7 +22,7 @@ export default async function BrowseStaysPage({
     const value = query[key];
     return Array.isArray(value) ? value[0] : value;
   };
-  const t = await getTranslations("common");
+  const t = await getTranslations("browse");
   const tipo = one("tipo");
 
   const [rows, locations] = await Promise.all([
@@ -45,31 +45,34 @@ export default async function BrowseStaysPage({
   ]);
 
   return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">{t("stays")}</h1>
-      <BrowseFilters
-        vertical="stay"
-        action="/alojamientos"
-        locations={locations.map((l) => ({ slug: l.slug, name: l.name, listings: Number(l.listings) }))}
-        values={{
-          ubicacion: one("ubicacion"),
-          tipo,
-          huespedes: one("huespedes"),
-          dormitorios: one("dormitorios"),
-          min: one("min"),
-          max: one("max"),
-          orden: one("orden"),
-        }}
-      />
-      <p className="text-sm text-neutral-600">{rows.length} resultado(s)</p>
-      <ul>
-        {rows.map((row) => (
-          <ListingCard key={row.id} listing={row} />
-        ))}
-      </ul>
-      {rows.length === 0 && (
-        <p className="text-neutral-600">No encontramos alojamientos con esos filtros.</p>
-      )}
+    <section className="section pt-10">
+      <div className="wrap space-y-6">
+        <div>
+          <span className="eyebrow">{t("stayEyebrow")}</span>
+          <h1>{t("stayTitle")}</h1>
+        </div>
+        <BrowseFilters
+          vertical="stay"
+          action="/alojamientos"
+          locations={locations.map((l) => ({ slug: l.slug, name: l.name, listings: Number(l.listings) }))}
+          values={{
+            ubicacion: one("ubicacion"),
+            tipo,
+            huespedes: one("huespedes"),
+            dormitorios: one("dormitorios"),
+            min: one("min"),
+            max: one("max"),
+            orden: one("orden"),
+          }}
+        />
+        <p className="text-sm text-ink/60">{t("results", { count: rows.length })}</p>
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {rows.map((row, i) => (
+            <ListingCard key={row.id} listing={row} reveal={i % 6} />
+          ))}
+        </ul>
+        {rows.length === 0 && <p className="text-ink/60">{t("emptyStays")}</p>}
+      </div>
     </section>
   );
 }

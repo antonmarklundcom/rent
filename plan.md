@@ -559,6 +559,107 @@ insert; it now reads the booking's existing keys and inserts the gap.
   invariant is `published` only) and `listPublishedListings` was superseded by
   `browseListings`.
 
+### Phase S-1 — Public site UI + imagery (S1, S2, S4) — merged as [PR #9](https://github.com/antonmarklundcom/rent/pull/9)
+
+**2026-08-28 — S-1 merged.** The public
+site now has a real design (`web-design-system` skill, WARM CRAFT track:
+Instrument Serif + Inter, `#FBF7F1`/`#2A1D14`/`#B4762C`), every §6.S2 page, and
+an attempted §6.S4 imagery pass — see the imagery note below before assuming
+photography shipped. Next phase (S-2) starts at `src/components/site-header.tsx`
++ `src/app/[locale]/admin/` + `panel/` + `tarea/` (all still O-4's unstyled
+markup; the marketing route group's chrome is done, admin/panel/cleaner is
+§6.S3) and at `messages/en.json` (still the O-1 stub for admin strings, per
+KNOWN-ISSUES).
+
+**What now exists**: `src/app/[locale]/(marketing)/` route group holds every
+public page — home, `alojamientos`/`autos` browse, `publicacion/[slug]` detail,
+new `alojamientos|autos/[ciudad]` + `.../[ciudad]/[barrio]` location landing
+pages (share one component, `src/components/location-landing.tsx`), `nosotros`,
+`contacto` (posts to the existing `POST /api/leads`), and `rent-car-paraguay`
+(only ever resolves under `/en/...`, 404s under `es`) · `src/app/[locale]/(marketing)/layout.tsx`
+adds `SiteFooter`; the bare `[locale]/layout.tsx` keeps just `SiteHeader` so
+admin/panel/login/cleaner are untouched · `not-found.tsx` styled · design
+tokens in `src/app/globals.css` (Tailwind v4 `@theme`) · `public/motion.js` +
+`public/analytics.js` (web-design-system's scroll-reveal and the `data-ev`
+shim, copied close to verbatim) · `src/components/safe-image.tsx` (see below) ·
+one new read-only query, `getPublicLocation` in `src/db/queries/listings.ts`,
+added under the §9b rule for the location-page breadcrumb — nothing in
+`src/db/schema.ts` or the money/booking/auth libs was touched.
+
+**Decisions/deviations made under §4.4** (none needed Anton):
+
+1. **Location landing pages are nested under `/alojamientos/[ciudad]` and
+   `/autos/[ciudad]`**, not a literal `/[vertical]/[ciudad]` segment — the
+   plan's route table already uses the Spanish vertical names as fixed
+   top-level routes, so this is the same convention, just one level deeper.
+   `getPublicLocation` + the existing `browseListings`/`browseLocations` cover
+   it with no new Drizzle in a page.
+2. **`rent-car-paraguay` 404s under `es`** rather than existing at two paths —
+   `next-intl`'s shared-pathname routing would otherwise also serve it at
+   `/rent-car-paraguay`, duplicate content under the default locale that §1.3
+   never asked for. `generateMetadata` and the page both check `locale` first.
+3. **`SafeImage` (`src/components/safe-image.tsx`) replaces every public
+   `<img>`.** It falls back to a plain tinted box instead of the browser's
+   broken-image glyph, and also self-checks `complete && naturalWidth === 0`
+   once on mount — a same-origin 404 in dev usually resolves before hydration
+   attaches React's `onError`, and `error` does not bubble for React to replay
+   afterwards, so without the mount check the glyph flashed once before
+   settling.
+
+**Found and fixed in the pre-handoff audit** (a second Sonnet session resumed
+this branch from a single unmerged "attempt" commit — the audit below is that
+session's contribution): **`/[vertical]/[ciudad]/[barrio]` ignored its own
+`ciudad` segment.** `LocationLanding` looked a barrio up by its own slug only,
+so `/alojamientos/<any-string>/asuncion-villa-morra` 200'd identically to the
+real `/alojamientos/asuncion/asuncion-villa-morra` — unbounded duplicate-content
+URLs for every barrio, working against the exact SEO goal §6.S5 is for. Fixed
+by threading the URL's `ciudad` segment into `LocationLanding` as `parentSlug`
+and 404ing when it does not match the resolved location's actual parent;
+`getPublicLocation` already returned the parent, so no query change was
+needed. Verified with a live route sweep (`/alojamientos/<real-city>/<real-barrio>`
+still 200s, any mismatched or invented city segment 404s) before re-running
+`npm run verify` (332/332) and `npm run build` (green with `.env` and with no
+env at all).
+
+**Imagery (§6.S4) — attempted, not completed; not a foundation gap.** MCP
+image generation works from this session (verified with a live test
+generation, both in the original attempt and independently re-confirmed by
+the pre-handoff-audit session), but this session's sandboxed egress proxy
+blocks fetching the result bytes — confirmed with a direct `curl` of a real
+`result_url` against Higgsfield's CDN (`403`, same host-allowlist policy that
+blocks `example.com`; the audit session's own re-test got the identical `403`
+via `CONNECT tunnel failed`, per `/root/.ccr/README.md`'s "do not retry or
+route around it — report the blocked host"). The `higgsfield-web-imagery`
+skill's documented fallback for
+exactly this case is a human downloading and re-uploading a zip in chat, which
+does not exist in an unattended phased-build session. `scripts/imagery-manifest.json`
+has the four prompts and destinations a session with normal egress (the local
+CLI, or a future cloud session with a broader policy) needs to finish this in
+one pass — the seed already points every listing at one shared
+`/images/placeholder-{vertical}.jpg`, not a file per listing, so four
+generations cover the whole site. Until then `SafeImage` keeps every slot
+looking like a deliberate placeholder, not a broken build. Full detail in
+`KNOWN-ISSUES.md` under "phase S-1".
+
+**Verification**: `npm run build` green both with `.env` present and with no
+env at all (plan §4.5); `npm run verify` still 213 + 332 unchanged (S-1 added
+no logic); a manual route sweep of every new and existing public/admin/panel
+URL (published listing, unpublished slug, known/unknown location slugs, both
+locales) showed no missing-translation errors and correct 200/404/307s;
+visual QA at 360/390/1280/1440px against `web-design-system/references/qa-preflight.md`
+(one H1 per page, no overlap, full-bleed + overlap + oversized-statement
+present on the home page, ≤2 consecutive identical section patterns, one
+accent colour, WhatsApp green confined to the CTA glyph). The pre-handoff
+audit re-ran all of the above against a locally installed MariaDB (no
+`DATABASE_URL` was preconfigured in that session; `.env.example` + a fresh
+`mariadb-server` install stood in for Hostinger) and additionally captured
+real Playwright screenshots of every public route at all four widths against
+a running `next dev` — full-page captures needed an explicit scroll pass
+first, since `motion.js`'s `[data-reveal]` sections start at `opacity:0` until
+their `IntersectionObserver` fires, which a non-scrolling screenshot never
+triggers; once scrolled, cards, typed facts, filters and the booking form all
+render as designed.
+
 ---
 
 ## 9b. WINDOW-1 HANDOFF — everything Sonnet needs (plan §5.O12)
