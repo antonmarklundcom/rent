@@ -264,7 +264,7 @@ image-upload mechanism, owner publish flow (direct vs admin approval).
 `src/lib/scope.ts`, `src/lib/money.ts`, and `scripts/`. All Drizzle stays in
 `src/db/queries/`.
 
-### Phase O-2 — Booking & money engine (O4, O5, O7) — merged as PR #PRNUM
+### Phase O-2 — Booking & money engine (O4, O5, O7) — merged as [PR #3](https://github.com/antonmarklundcom/rent/pull/3)
 
 **2026-08-28 — O-2 merged.** The booking/availability engine, iCal sync and the
 money engine now exist. **One** overlap function
@@ -287,8 +287,10 @@ is the credential, no guest data in the feed) and `/api/estados/[id].html`
 (admin or the owning owner) · scripts `sync-ical.ts` and
 `generate-statements.ts`, both idempotent and cron-ready · tests
 `scripts/verify-logic.ts` (112 checks, **no database needed**) and
-`scripts/verify-booking-money.ts` (91 checks, called by `verify-core.ts`, builds
-and tears down its own fixtures). `npm run verify` runs both: 112 + 124.
+`scripts/verify-booking-money.ts` (96 checks, called by `verify-core.ts`, builds
+and tears down its own fixtures — including a 4-way concurrency check proving
+the lock, not luck, prevents double-booking). `npm run verify` runs both:
+112 + 129.
 
 **Decisions/deviations made under §4.4** (none needed Anton):
 

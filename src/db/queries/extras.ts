@@ -62,7 +62,7 @@ export async function resolveExtraSelections(
   });
 }
 
-export async function findPromoByCode(
+async function findPromoByCode(
   code: string,
   executor: Executor = db,
 ): Promise<PromoInput | null> {

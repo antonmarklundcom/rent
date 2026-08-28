@@ -35,17 +35,8 @@ export const BOOKING_TRANSITIONS: Record<BookingStatus, readonly BookingStatus[]
  */
 export const OCCUPYING_STATUSES: readonly BookingStatus[] = ["confirmed", "active", "completed"];
 
-/** Statuses that do NOT hold dates: an inquiry is a lead, a cancellation is gone. */
-export const NON_OCCUPYING_STATUSES: readonly BookingStatus[] = BOOKING_STATUSES.filter(
-  (status) => !OCCUPYING_STATUSES.includes(status),
-);
-
 export function occupiesCalendar(status: BookingStatus): boolean {
   return OCCUPYING_STATUSES.includes(status);
-}
-
-export function isTerminal(status: BookingStatus): boolean {
-  return BOOKING_TRANSITIONS[status].length === 0;
 }
 
 export function canTransition(from: BookingStatus, to: BookingStatus): boolean {

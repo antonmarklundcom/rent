@@ -122,13 +122,6 @@ export async function findConflicts(
   ].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 }
 
-export async function isAvailable(
-  query: AvailabilityQuery,
-  executor: Executor = db,
-): Promise<boolean> {
-  return (await findConflicts(query, executor)).length === 0;
-}
-
 /**
  * Reject the range if anything already occupies it. THE guard — every write
  * path that claims dates calls this, inside the same transaction as its insert.
@@ -166,69 +159,6 @@ export async function listOccupiedRanges(
     { listingId, startAt: window.startAt, endAt: window.endAt },
     executor,
   );
-}
-
-/** Occupied ranges for several listings at once (owner calendar, admin views). */
-export async function listOccupiedRangesForListings(
-  listingIds: number[],
-  window: DateRange,
-  executor: Executor = db,
-): Promise<Map<number, Conflict[]>> {
-  const out = new Map<number, Conflict[]>();
-  if (listingIds.length === 0) return out;
-  const { startAt, endAt } = assertValidRange(window.startAt, window.endAt);
-
-  const [bookingRows, blockRows] = await Promise.all([
-    executor
-      .select({
-        listingId: bookings.listingId,
-        id: bookings.id,
-        reference: bookings.reference,
-        status: bookings.status,
-        startAt: bookings.startAt,
-        endAt: bookings.endAt,
-      })
-      .from(bookings)
-      .where(
-        and(
-          inArray(bookings.listingId, listingIds),
-          inArray(bookings.status, [...OCCUPYING_STATUSES]),
-          lt(bookings.startAt, endAt),
-          gt(bookings.endAt, startAt),
-        ),
-      ),
-    executor
-      .select({
-        listingId: availabilityBlocks.listingId,
-        id: availabilityBlocks.id,
-        reason: availabilityBlocks.reason,
-        note: availabilityBlocks.note,
-        startAt: availabilityBlocks.startAt,
-        endAt: availabilityBlocks.endAt,
-      })
-      .from(availabilityBlocks)
-      .where(
-        and(
-          inArray(availabilityBlocks.listingId, listingIds),
-          lt(availabilityBlocks.startAt, endAt),
-          gt(availabilityBlocks.endAt, startAt),
-        ),
-      ),
-  ]);
-
-  for (const id of listingIds) out.set(id, []);
-  for (const row of bookingRows) {
-    const { listingId, ...rest } = row;
-    out.get(listingId)?.push({ kind: "booking", ...rest });
-  }
-  for (const row of blockRows) {
-    const { listingId, ...rest } = row;
-    out.get(listingId)?.push({ kind: "block", ...rest });
-  }
-  for (const list of out.values()) {
-    list.sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
-  }
-  return out;
 }
 
 /**

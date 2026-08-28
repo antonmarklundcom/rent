@@ -17,11 +17,7 @@
  *      isolates that choice in one function: changing it later is a one-line
  *      edit plus a re-generation of unbilled statements, not a rewrite.
  */
-import {
-  PRICE_UNITS,
-  type Vertical,
-  type PriceUnit,
-} from "@/db/schema";
+import type { PriceUnit, Vertical } from "@/db/schema";
 import { assertValidRange, daysBetween, monthsBetween, nightsBetween } from "@/lib/dates";
 import { DomainError } from "@/lib/errors";
 import { addMoney, multiplyMoney, percentOf, toMoney, toNumber } from "@/lib/money";
@@ -52,10 +48,6 @@ export function computeUnits(priceUnit: PriceUnit, startAt: Date, endAt: Date): 
   }
 }
 
-export function isPriceUnit(value: string): value is PriceUnit {
-  return (PRICE_UNITS as readonly string[]).includes(value);
-}
-
 /* -------------------------------------------------------------------------- */
 /* Extras (#10)                                                                */
 /* -------------------------------------------------------------------------- */
@@ -72,7 +64,7 @@ export type ExtraSelection = {
 
 export type PricedExtraLine = ExtraSelection & { lineTotal: string };
 
-export function priceExtraLine(extra: ExtraSelection, units: number): PricedExtraLine {
+function priceExtraLine(extra: ExtraSelection, units: number): PricedExtraLine {
   if (!Number.isInteger(extra.qty) || extra.qty < 1) {
     throw new DomainError(
       `Cantidad inválida para "${extra.name}"`,
@@ -106,7 +98,7 @@ export type PromoInput = {
  * Validate a promo against the booking it is being applied to. Throws a
  * `DomainError` whose code names the exact reason — the caller renders it.
  */
-export function assertPromoUsable(
+function assertPromoUsable(
   promo: PromoInput,
   context: { vertical: Vertical; now?: Date },
 ): void {
