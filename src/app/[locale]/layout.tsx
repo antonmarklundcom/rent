@@ -1,10 +1,26 @@
 import type { Metadata } from "next";
+import Script from "next/script";
+import { Instrument_Serif, Inter } from "next/font/google";
 import { notFound } from "next/navigation";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { routing } from "@/i18n/routing";
 import { SiteHeader } from "@/components/site-header";
 import "../globals.css";
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-instrument-serif",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 /**
  * Every page under this layout reads the session cookie (header) and most read
@@ -41,14 +57,23 @@ export default async function LocaleLayout({
   const { locale } = await params;
   if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
+  const t = await getTranslations("common");
 
   return (
-    <html lang={locale}>
-      <body className="min-h-screen bg-white text-neutral-900 antialiased">
+    <html lang={locale} className={`${instrumentSerif.variable} ${inter.variable}`}>
+      <body className="min-h-screen bg-base font-text text-ink antialiased">
         <NextIntlClientProvider>
+          <a
+            href="#contenido"
+            className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-3 focus:rounded-sm focus:bg-ink focus:px-4 focus:py-2 focus:text-base"
+          >
+            {t("skipToContent")}
+          </a>
           <SiteHeader />
-          <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
+          <main id="contenido">{children}</main>
         </NextIntlClientProvider>
+        <Script src="/motion.js" strategy="afterInteractive" />
+        <Script src="/analytics.js" strategy="afterInteractive" />
       </body>
     </html>
   );

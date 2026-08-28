@@ -1,1 +1,165 @@
 @import "tailwindcss";
+
+/**
+ * Design tokens — web-design-system skill, WARM CRAFT track (hospitality fit
+ * for a rental platform). Resolve-once, single source of truth for Window 2's
+ * public site (plan §6.S2). Fonts are loaded by next/font in
+ * src/app/[locale]/layout.tsx and exposed as --font-instrument-serif /
+ * --font-inter; referenced here, never re-declared per page.
+ */
+@theme inline {
+  --color-base: #fbf7f1;
+  --color-ink: #2a1d14;
+  --color-accent: #b4762c;
+  --color-accent-ink: #ffffff;
+  --color-surface: #ffffff;
+  --color-wa: #25d366;
+
+  --font-display: var(--font-instrument-serif), Georgia, serif;
+  --font-text: var(--font-inter), system-ui, sans-serif;
+
+  --radius-sm: 6px;
+  --radius-md: 14px;
+  --radius-lg: 28px;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 12px rgb(0 0 0 / 0.06);
+  --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.06), 0 16px 40px rgb(0 0 0 / 0.1);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-io: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    background: var(--color-base);
+    color: var(--color-ink);
+    font-family: var(--font-text);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.03em;
+    line-height: 1.03;
+    text-wrap: balance;
+  }
+  h1 {
+    font-size: clamp(2.4rem, 6vw, 3.6rem);
+  }
+  h2 {
+    font-size: clamp(1.9rem, 4.5vw, 2.8rem);
+  }
+  h3 {
+    font-size: 1.5rem;
+    line-height: 1.15;
+  }
+  p {
+    max-width: 65ch;
+  }
+}
+
+@layer components {
+  .wrap {
+    max-width: 1200px;
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 5vw, 3rem);
+  }
+  .section {
+    padding-block: clamp(3.5rem, 9vw, 7rem);
+    position: relative;
+  }
+
+  .eyebrow {
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+    font-weight: 600;
+    display: block;
+  }
+
+  .statement {
+    font-family: var(--font-display);
+    font-size: clamp(2.6rem, 9vw, 4.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.03em;
+  }
+
+  /* grain: apply to every dark/ink section for texture over flat fills */
+  .grain {
+    position: relative;
+    isolation: isolate;
+  }
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.06;
+    z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .grain > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* scrim: any text sitting on a photo, never raw */
+  .scrim {
+    position: relative;
+    isolation: isolate;
+  }
+  .scrim::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(
+      180deg,
+      rgb(0 0 0 / 0.1) 0%,
+      rgb(0 0 0 / 0.5) 65%,
+      rgb(0 0 0 / 0.75) 100%
+    );
+  }
+  .scrim > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .card--hair {
+    border: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent);
+  }
+  .card--raised {
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+  }
+  .card--ink {
+    background: var(--color-ink);
+    color: var(--color-base);
+  }
+  .card--accent {
+    background: var(--color-surface);
+    border: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent);
+    border-top: 3px solid var(--color-accent);
+  }
+
+  [data-sticky-header].is-stuck {
+    box-shadow: var(--shadow-card);
+    background: color-mix(in srgb, var(--color-base) 92%, transparent);
+    backdrop-filter: blur(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}

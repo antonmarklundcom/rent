@@ -161,3 +161,40 @@ blocks a later phase.
 - **The public detail page lists image URLs as text.** `listing_images` rows
   still point at `/images/placeholder-*.jpg`, which do not exist, so rendering
   them as `<img>` would show broken images. Phase S-4 fills the slots.
+
+## From phase S-1 (public site UI)
+
+- **S-4 imagery could not be fetched — every photo slot is still empty.**
+  MCP image generation itself works fine from this session (confirmed with a
+  live test generation), but downloading the result bytes does not: this
+  session's sandboxed egress proxy only allows a fixed host allowlist (npm,
+  GitHub, `api.anthropic.com`, …) and returns `403` on Higgsfield's CDN,
+  confirmed with a direct `curl` of a real `result_url`. The
+  `higgsfield-web-imagery` skill's own fallback for this exact situation is a
+  human downloading and re-uploading a zip in chat — not available in an
+  unattended phased-build session. `scripts/imagery-manifest.json` has the
+  four prompts + exact `public/images/...` destinations needed (one shared
+  hero each for the home page and the English car-rental landing page, one
+  shared card photo each for stays and cars — the seed already points every
+  listing at `/images/placeholder-{vertical}.jpg`, not a file per listing, so
+  four generations are enough for the whole site). A session with normal
+  network egress (the local Claude Code CLI, or a future cloud session with a
+  broader policy) can run it directly. Until then every image slot renders as
+  a plain tinted box, not a broken-image icon — see the next item.
+- **`SafeImage` (`src/components/safe-image.tsx`) is the fallback-on-error
+  `<img>` used everywhere on the public site.** It also self-checks on mount
+  (`complete && naturalWidth === 0`) because a same-origin 404 in dev often
+  resolves before hydration attaches React's `onError` listener, and `error`
+  does not bubble for React to replay post-hydration — without that check the
+  broken-image glyph flashes once before settling. Any new public image slot
+  should use this component, not a raw `<img>`, until real photography lands.
+- **Location landing pages (`/alojamientos/[ciudad]`, `.../[barrio]`,
+  `/autos/...`) have no per-route metadata, canonical tag, or JSON-LD yet.**
+  That is deliberately S-2's job (plan §6.S5), not a miss here — the pages
+  themselves, their filters and their breadcrumbs are complete and tested.
+- **`getPublicLocation` (`src/db/queries/listings.ts`) is a new read-only
+  query** added under the §9b rule ("if a page needs data no query returns,
+  add a function there") for the location-page breadcrumb. It does not gate
+  on the location having a published listing itself — `browseListings`
+  already 404s the page when there are none, so this only ever resolves for a
+  slug a page can already prove has public listings behind it.

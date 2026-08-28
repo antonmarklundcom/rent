@@ -1,30 +1,45 @@
+import { getTranslations } from "next-intl/server";
 import { PROPERTY_TYPES, VEHICLE_TYPES, type Vertical } from "@/db/schema";
 
 /**
- * The browse filter form (plan §5.O11).
+ * The browse filter form (plan §5.O11 → §6.S2 restyle).
  *
  * A plain GET `<form>` on purpose: it works with JavaScript off, every filtered
  * view has a real URL Sonnet can add a canonical tag to (plan §6.S5), and the
- * back button behaves. Ugly by design — Window 2 restyles it.
+ * back button behaves.
  */
-export function BrowseFilters({
+export async function BrowseFilters({
   vertical,
   action,
   locations,
   values,
+  lockedLocationLabel,
 }: {
   vertical: Vertical;
   action: string;
   locations: { slug: string; name: string; listings: number }[];
   values: Record<string, string | undefined>;
+  /** Set on a location landing page: the ubicación field is hidden, not shown as a dropdown. */
+  lockedLocationLabel?: string;
 }) {
+  const t = await getTranslations("filters");
+  const inputClass =
+    "rounded-sm border border-ink/15 bg-surface px-3 py-2.5 text-sm focus:border-accent focus:outline-none";
+  const labelClass = "flex flex-col gap-1 text-xs font-medium text-ink/60";
+
   return (
-    <form action={action} method="get" className="space-y-2 border border-neutral-300 p-3 text-sm">
-      <div className="flex flex-wrap gap-3">
-        <label className="flex flex-col">
-          Ubicación
-          <select name="ubicacion" defaultValue={values.ubicacion ?? ""} className="border p-1">
-            <option value="">Todas</option>
+    <form
+      action={action}
+      method="get"
+      className="card--raised card--hair flex flex-wrap items-end gap-3 rounded-md p-4"
+    >
+      {lockedLocationLabel ? (
+        <input type="hidden" name="ubicacion" value={values.ubicacion ?? ""} />
+      ) : (
+        <label className={labelClass}>
+          {t("location")}
+          <select name="ubicacion" defaultValue={values.ubicacion ?? ""} className={inputClass}>
+            <option value="">{t("allLocations")}</option>
             {locations.map((location) => (
               <option key={location.slug} value={location.slug}>
                 {location.name} ({location.listings})
@@ -32,105 +47,112 @@ export function BrowseFilters({
             ))}
           </select>
         </label>
+      )}
 
-        {vertical === "stay" ? (
-          <>
-            <label className="flex flex-col">
-              Tipo
-              <select name="tipo" defaultValue={values.tipo ?? ""} className="border p-1">
-                <option value="">Todos</option>
-                {PROPERTY_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col">
-              Huéspedes (mín.)
-              <input
-                type="number"
-                min={1}
-                max={30}
-                name="huespedes"
-                defaultValue={values.huespedes ?? ""}
-                className="w-24 border p-1"
-              />
-            </label>
-            <label className="flex flex-col">
-              Dormitorios (mín.)
-              <input
-                type="number"
-                min={1}
-                max={15}
-                name="dormitorios"
-                defaultValue={values.dormitorios ?? ""}
-                className="w-24 border p-1"
-              />
-            </label>
-          </>
-        ) : (
-          <>
-            <label className="flex flex-col">
-              Tipo
-              <select name="tipo" defaultValue={values.tipo ?? ""} className="border p-1">
-                <option value="">Todos</option>
-                {VEHICLE_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col">
-              Asientos (mín.)
-              <input
-                type="number"
-                min={1}
-                max={20}
-                name="asientos"
-                defaultValue={values.asientos ?? ""}
-                className="w-24 border p-1"
-              />
-            </label>
-          </>
-        )}
+      {vertical === "stay" ? (
+        <>
+          <label className={labelClass}>
+            {t("type")}
+            <select name="tipo" defaultValue={values.tipo ?? ""} className={inputClass}>
+              <option value="">{t("allTypes")}</option>
+              {PROPERTY_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {t(`propertyType.${type}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={labelClass}>
+            {t("guestsMin")}
+            <input
+              type="number"
+              min={1}
+              max={30}
+              name="huespedes"
+              defaultValue={values.huespedes ?? ""}
+              className={`w-24 ${inputClass}`}
+            />
+          </label>
+          <label className={labelClass}>
+            {t("bedroomsMin")}
+            <input
+              type="number"
+              min={1}
+              max={15}
+              name="dormitorios"
+              defaultValue={values.dormitorios ?? ""}
+              className={`w-24 ${inputClass}`}
+            />
+          </label>
+        </>
+      ) : (
+        <>
+          <label className={labelClass}>
+            {t("type")}
+            <select name="tipo" defaultValue={values.tipo ?? ""} className={inputClass}>
+              <option value="">{t("allTypes")}</option>
+              {VEHICLE_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {t(`vehicleType.${type}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={labelClass}>
+            {t("seatsMin")}
+            <input
+              type="number"
+              min={1}
+              max={20}
+              name="asientos"
+              defaultValue={values.asientos ?? ""}
+              className={`w-24 ${inputClass}`}
+            />
+          </label>
+        </>
+      )}
 
-        <label className="flex flex-col">
-          Precio mín.
-          <input
-            type="number"
-            min={0}
-            name="min"
-            defaultValue={values.min ?? ""}
-            className="w-32 border p-1"
-          />
-        </label>
-        <label className="flex flex-col">
-          Precio máx.
-          <input
-            type="number"
-            min={0}
-            name="max"
-            defaultValue={values.max ?? ""}
-            className="w-32 border p-1"
-          />
-        </label>
-        <label className="flex flex-col">
-          Orden
-          <select name="orden" defaultValue={values.orden ?? "recent"} className="border p-1">
-            <option value="recent">Más recientes</option>
-            <option value="price_asc">Precio: menor a mayor</option>
-            <option value="price_desc">Precio: mayor a menor</option>
-          </select>
-        </label>
-      </div>
+      <label className={labelClass}>
+        {t("priceMin")}
+        <input
+          type="number"
+          min={0}
+          name="min"
+          defaultValue={values.min ?? ""}
+          className={`w-28 ${inputClass}`}
+        />
+      </label>
+      <label className={labelClass}>
+        {t("priceMax")}
+        <input
+          type="number"
+          min={0}
+          name="max"
+          defaultValue={values.max ?? ""}
+          className={`w-28 ${inputClass}`}
+        />
+      </label>
+      <label className={labelClass}>
+        {t("sort")}
+        <select name="orden" defaultValue={values.orden ?? "recent"} className={inputClass}>
+          <option value="recent">{t("sortRecent")}</option>
+          <option value="price_asc">{t("sortPriceAsc")}</option>
+          <option value="price_desc">{t("sortPriceDesc")}</option>
+        </select>
+      </label>
+
       <div className="flex gap-2">
-        <button type="submit" className="rounded bg-neutral-900 px-3 py-1 text-white">
-          Filtrar
+        <button
+          type="submit"
+          className="min-h-11 rounded-sm bg-ink px-5 text-sm font-medium text-base transition-transform hover:-translate-y-0.5"
+        >
+          {t("apply")}
         </button>
-        <a href={action} className="rounded border px-3 py-1">
-          Limpiar
+        <a
+          href={action}
+          className="flex min-h-11 items-center rounded-sm border border-ink/15 px-4 text-sm hover:border-ink/30"
+        >
+          {t("clear")}
         </a>
       </div>
     </form>
