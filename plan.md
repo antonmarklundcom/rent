@@ -1,157 +1,177 @@
 # alquilar.com.py — Build Plan (repo: rent)
 
-Reviewed against Anton's plan sketch ("alquilar.com.py — Plan for Review"). This document contains (1) the review verdict on the sketch's open questions, (2) the v1 scope locked from it, and (3) the model work split: **Opus builds everything in Window 1, then Sonnet builds everything in Window 2** — two sequential sessions, no interleaving.
+Two-vertical rental operations platform for Paraguay: **Alojamientos** (short-term stays: casas, departamentos) and **Autos** (vehicle rental). The company operates as middleman/manager for owners — model "(b)-lite": management tool + public lead/booking-capture pages, no payment escrow or marketplace brokering in v1.
 
-Rule for both windows: **do no work outside this plan.** Anything out of scope goes into section 7 (Backlog), not into the codebase.
-
----
-
-## 1. Review of the plan sketch
-
-The sketch is solid: keyword research is real, the domain reasoning (alquilar vs alquiler = same search intent) is correct, subfolders-not-subdomains is the right SEO call, and the shared booking/calendar/messaging engine forked only where verticals differ is the right architecture instinct. Two decisions were flagged as blocking; recommended resolutions below so the build can start. Override here if disagreed — everything downstream assumes these.
-
-**Q1 — Marketplace-broker (a) vs management-tool (b):** go with the sketch's own lean, **(b)-lite**. Ship the owner/management side (listings, calendar, WhatsApp-first comms, info knowledge base, owner reports) with public listing pages that capture leads/booking requests — but no payment escrow, no reviews/trust infrastructure, no transaction brokering in v1. This defers the legal/liability question (sketch §6.3) instead of being blocked by it, and the public pages still harvest the SEO demand. Growing toward (a) later is additive (payments + reviews on top of the same bookings table), not a rewrite.
-
-**Q2 — Vertical sequencing:** **alojamientos first, autos second — but both in the same build**, because the engine is shared. Reasons: alojamientos has the lower-competition organic entry (sketch §3); the car-intermediary legal question is unresolved and only bites the autos vertical; and (b)-lite management fits stay-hosts (Airbnb owners wanting backend help) most naturally. "Second" here means: the schema, routes, and admin support both verticals from day one (retrofitting a second vertical into a single-vertical schema is the expensive path), but public autos pages launch as a lightweight lead-capture vertical (browse + "consultá por WhatsApp") rather than the full booking flow, until legal input lands.
-
-**Q3 — Legal (car liability):** not a build task. Stays open; tracked in Backlog. The (b)-lite + autos-as-lead-capture decision above means nothing in v1 depends on it.
-
-**Q4 — Defensive domains (alquileres.com.py, rentar.com.py):** business decision, not build work. Backlog. Cheap insurance; recommendation is register both if available.
-
-**Q5 — Portfolio cannibalization:** low risk vs propia (long-term sales/rental vs short-term stays + cars are different intents); worth a one-time check against the residency-services property for content overlap. Backlog.
-
-**rent.com.py:** v1 treatment is a 301 redirect to `alquilar.com.py/autos` plus one English landing page targeting "rent car paraguay / asuncion" living on alquilar.com.py. A separate English microsite is out of scope.
+**Build format:** exactly two autonomous sessions ("windows"). **Window 1 = Opus builds the entire backend/foundation. Window 2 = Sonnet builds the entire frontend/polish/deploy.** Prompts for both live in `prompts/`. Neither window does work outside this plan — anything extra goes to §10 Backlog.
 
 ---
 
-## 2. Locked v1 scope
+## 1. Decisions already made (do not re-litigate in build sessions)
 
-- One domain, two verticals as subfolders: `/alojamientos` and `/autos`.
-- Shared engine: `owners` → `listings` (type: `stay | car`) → type-specific detail tables → `bookings` → `messages` (channel-agnostic) → per-listing `info_items` knowledge base.
-- Owner dashboard: calendar, upcoming bookings, earnings summary.
-- Auto-generated monthly owner reports (earnings/occupancy) delivered via WhatsApp link or email.
-- WhatsApp-first renter/guest communication, leads into VenderCRM (existing lead-capture pattern).
-- AI-drafted reply suggestions to common questions, grounded in the listing's `info_items` (admin/owner approves before sending — no auto-send in v1).
-- Admin panel: internal team manages both verticals, all owners, all bookings from one place.
-- SEO structure: city/barrio landing pages per vertical ("cerca de mi" pattern), es-PY voseo copy, one English car-rental landing page.
-- Stack: Next.js 15 (App Router, TS, Tailwind) + Drizzle + MySQL on Hostinger managed Node.js, per `nodejs-mysql-hostinger-stack` + `nextjs-deploy-hostinger`.
-
-**Explicitly out of v1** (from the sketch, confirmed): Airbnb/channel-manager integration, payment escrow, insurance/trust infrastructure, reviews, renter accounts (renters interact via public pages + WhatsApp; only owners and staff log in), autos online booking flow (lead-capture only until legal is resolved).
+1. **Model (b)-lite**: management tool with public pages capturing leads/booking requests. No escrow, no reviews marketplace, no renter accounts. Growing to full marketplace later is additive.
+2. **Alojamientos is the lead vertical**; autos ships in the same build but its public side is lead-capture only (browse + WhatsApp/booking inquiry, no online car booking confirmation) until car-liability legal input lands.
+3. **One domain, subfolders**: `alquilar.com.py/alojamientos` + `/autos`. rent.com.py 301-redirects to `/autos`; one English landing page (`/en/rent-car-paraguay`) targets tourist search.
+4. **Stack**: Next.js 15 (App Router, TypeScript, Tailwind) + Drizzle ORM + MySQL on Hostinger managed Node.js, per `nodejs-mysql-hostinger-stack` + `nextjs-deploy-hostinger` skills. Sessions: iron-session + bcrypt (no OAuth). Leads → VenderCRM per `vendercrm-lead-capture`.
+5. **Out of v1 permanently** (Backlog): Airbnb API/paid PMS, payment escrow, public reviews, renter accounts, WhatsApp Business API auto-send (v1 = wa.me links + copy-paste + manual logging).
 
 ---
 
-## 3. Model split strategy
+## 2. Roles & object model (the two structural anchors)
 
-Two sequential windows, each model completing ALL its work before the other starts:
+### Roles — `users.role` enum, exactly these four values
 
-- **Window 1 — Opus: the hard, constraining half.** Scaffold, full two-vertical schema, auth/roles, booking/calendar engine, messaging + VenderCRM wiring, AI reply drafting, owner dashboard logic, admin CRUD, bare functional pages. Ends with an ugly-but-correct app, green build, seeded, every flow provable locally.
-- **Window 2 — Sonnet: the volume-and-polish half.** All public UI/design, barrio/city landing pages, SEO, imagery, es-PY copy, owner-dashboard and admin polish, reports formatting, deployment to Hostinger, live smoke test.
+| Role | Access |
+|---|---|
+| `super_admin` | Everything, including user management, commission rates, deleting data, settings. Only role that can create admins. |
+| `admin` | Day-to-day ops: all listings, bookings, cleaning/maintenance, messages, reports across both verticals. Cannot manage users or global settings. |
+| `owner` | Sees and manages **only rows where `owner_id = self`**: own listings, own bookings/calendar, own earnings/statements, own info-base. Whether they are a "property owner", "car owner", or both is determined by the listings they own — no separate role needed, one account can own both a departamento and an auto. |
+| `cleaner` | No dashboard login. Cleaners/staff-on-the-ground get **magic-link task pages** (tokenized URL per task, mobile-first) — zero login friction. A `users` row with role `cleaner` exists only to identify/assign them. |
 
-Opus goes first because its outputs (schema, query layer, route map, auth) constrain everything Sonnet does; the reverse order would force rework. The only interface between windows is section 6 (handoff notes) + the code itself. Sonnet must not modify schema or auth — needed changes get logged in Backlog and worked around.
+Every mutating server action/API route calls `requireRole()` server-side; every owner-facing query filters `owner_id` unless role is admin/super_admin. UI hiding is never the security boundary.
+
+### Objects — one shared `listings` table + typed detail tables
+
+- `listings`: id, unique `slug`, `vertical` enum `stay | car`, title, description, price + `price_unit` enum `per_night | per_day | per_month`, currency (PYG default), `location_id`, lat/lng nullable, `status` enum `draft | published | paused`, `published_at`, `owner_id`, `commission_pct` (falls back to owner default), `cancellation_policy` enum `flexible | moderate | strict`, `updated_by`/`updated_at`.
+- `stay_details` (1:1 with a stay listing): `property_type` enum **`casa | departamento | habitacion | otro`**, bedrooms, bathrooms, max_guests, area_m2, amenities JSON.
+- `car_details` (1:1 with a car listing): `vehicle_type` enum **`auto | camioneta | suv | moto | otro`**, make, model, year, transmission, fuel, seats, plate (private), daily_km_limit, insurance_terms text.
+
+So yes: casa/departamento and cars/vehicles are first-class typed database objects, and everything downstream (bookings, cleaning, inspections, expenses, reports) hangs off `listings.id` regardless of vertical.
 
 ---
 
-## 4. Window 1 — Opus tasks (in order)
+## 3. Feature set v1 (core + all 20 approved extras)
+
+Core engine: listings CRUD, availability calendar, bookings with state machine, WhatsApp-first messaging log, per-listing info knowledge base with AI-drafted replies (human-approved), owner dashboard, admin panel, SEO location pages, VenderCRM lead forwarding.
+
+Approved extras, grouped by the chain they build on (numbers = the agreed idea list):
+
+**A. Ground operations** — #1 Cleaning & turnover (checkout auto-creates task; magic-link mobile cleaner page; photo checklist; `needed → in_progress → ready`; stay not guest-ready until clean done) · #6 Maintenance ticketing (issues w/ photos, assignment, cost per listing) · #7 Per-listing expense tracking (cleaning/supplies/repairs; feeds net owner reports + business P&L per listing) · #13 Staff scheduling + cleaner job counts (day roster; completed-jobs count per cleaner for payroll) · #17 Inventory & supplies (per-property stock, low-stock alerts tied to cleaning tasks).
+
+**B. Calendar & revenue** — #2 iCal sync (import Airbnb/Booking iCal URLs per listing + export our own feed; cron-able sync script; conflicts block dates) · #3 Commission & owner billing (per-booking commission calc, monthly owner statements = gross − commission − expenses; statement PDF/HTML; FacturaPY-compatible data) · #8 Payment links for deposits (Bancard/QR link stored per booking, status `pending | paid | expired`; manual mark-paid in v1 — no gateway integration, just link + status tracking) · #10 Upsells/extras (per-listing or per-vertical extras: late checkout, transfer, silla de bebé, GPS; picked at booking, priced into totals) · #18 Promo codes + cancellation policies (code with % or fixed discount, validity window, usage cap; policy enum shown at booking).
+
+**C. Autos protection** — #5 Handover/inspection module (pickup + return records: photos, odometer, fuel level, notes, damage flag, guest confirmation) · #9 Security deposit tracking (held/returned/deducted per booking; deductions link to inspection/maintenance records) · #14 Fleet care & document expiry (per-vehicle reminders: service by date/km, insurance, registration/habilitación expiry; admin alert list) · #16 Guest/renter ID verification (document upload — cédula/passport/license — attached to booking, status `pending | verified | rejected`).
+
+**D. Communication & growth** — #4 Automated message sequences (templates + scheduled queue keyed to booking events: confirmed, pre-arrival T-1d, check-in day, checkout day, post-stay; v1 delivery = admin "due now" outbox with one-tap wa.me send + mark-sent) · #11 Review requests → Google (post-checkout scheduled message with the GBP review link; feeds local-pack strategy) · #19 Owner onboarding pipeline (checklist per new owner: contract, photos, info-base filled, iCal connected, first listing published; status visible in admin) · #20 Unified inbox (all message threads across listings/bookings in one admin view, AI-draft button inline).
+
+**E. Insight & control** — #12 Business analytics dashboard (occupancy %, revenue/listing, fleet utilization, top barrios, booking sources, expense ratios — admin-only) · #15 Owner blocked dates (owner blocks own-use dates from panel; blocks behave like bookings in availability).
+
+---
+
+## 4. Autonomy protocol (applies to BOTH windows — copied into both prompts)
+
+1. **Work until 100% of your window's exit criteria pass.** Do not stop early, do not ask permission for in-plan work.
+2. **Git flow**: work on your designated branch, commit in meaningful chunks, push, **create the PR yourself, subscribe to it, and merge it when CI/build is green.** Fix red CI yourself — a red build is your work, always.
+3. **Minor, non-blocking issues** (cosmetic bugs, edge cases, nice-to-haves): do NOT stop or ask — log them in `KNOWN-ISSUES.md` with enough detail to fix later, and keep building.
+4. **Stop and ask Anton ONLY when** (a) a missing credential/external account blocks progress (DB URL, VenderCRM key, Anthropic key, Hostinger/domain access) and no documented fallback exists, or (b) a decision would create a **bad foundation** — schema shape, auth model, money/commission calculation, booking-conflict logic — where guessing wrong forces a future rewrite. Everything else: pick the reasonable option, write the choice + reasoning into `plan.md` §9 handoff notes, continue.
+5. **Missing env values never block the build**: `.env.example` documents everything; code must degrade gracefully (e.g. CRM forward marked `pending` if key absent, AI drafting returns a "configure ANTHROPIC_API_KEY" notice). Local dev uses a seeded local/remote MySQL per the deploy skill.
+6. **Resumability**: if the session ends incomplete for any reason, re-running the same prompt must continue, not restart — so before building anything, check what already exists on the branch and continue from the first unmet exit criterion.
+7. **Sonnet hard limits (Window 2)**: never modify `src/db/schema.ts`, auth, or booking/commission logic. If a change there seems required, log it in §10 Backlog with a proposed diff and work around it.
+
+---
+
+## 5. Window 1 — OPUS (foundation: schema, logic, functional-but-ugly)
+
+Prompt file: `prompts/PROMPT-1-OPUS.md`. Order matters — later steps depend on earlier ones.
 
 ### O1. Scaffold
-- `create-next-app` (App Router, TS, Tailwind); `drizzle-orm`, `mysql2`, `drizzle-kit`, `tsx`.
-- `drizzle.config.ts`; `src/db/index.ts` single pool, `connectionLimit: 8`, `timezone: "Z"`.
-- `.env.example` committed with a comment per var (DB, session secret, VenderCRM tenant key, Anthropic API key for reply drafting). Never commit `.env`.
-- `scripts/` for idempotent seed/one-off jobs (`onDuplicateKeyUpdate` on unique slug/code).
+`create-next-app` (App Router, TS, Tailwind); add `drizzle-orm mysql2 drizzle-kit tsx iron-session bcryptjs zod`. `drizzle.config.ts`; `src/db/index.ts` single pool `connectionLimit: 8`, `timezone: "Z"`. Commit `.env.example` documenting every var (DATABASE_URL, SESSION_SECRET, VENDERCRM_API_URL/KEY, ANTHROPIC_API_KEY, NEXT_PUBLIC_SITE_URL, GBP_REVIEW_LINK). `scripts/` for idempotent jobs (`onDuplicateKeyUpdate` on unique keys).
 
-### O2. Schema — the load-bearing decision, made once
-- `users`: id, email, bcrypt hash, `role` enum `admin | staff | owner` from day one.
-- `owners`: profile + payout/contact details, linked to `users`.
-- `listings`: id, unique `slug`, `vertical` enum `stay | car`, title, description, price + pricing unit (`per_night | per_day | per_month`), currency (Gs. default), `location_id`, lat/lng nullable, `status` enum `draft | published | paused`, `published_at`, `owner_id`, `updated_by`/`updated_at` audit pair.
-- `stay_details` (1:1): property type, bedrooms, bathrooms, max guests, m², amenities JSON.
-- `car_details` (1:1): make, model, year, transmission, fuel, seats, mileage terms, insurance terms.
-- `listing_images`: listing_id, url, sort, alt.
-- `locations`: slug, name, parent_id (city → barrio) — drives filters and SEO landing pages.
-- `bookings`: listing_id, guest name/phone, date range (or pickup/return datetimes), status enum `inquiry | confirmed | active | completed | cancelled`, price snapshot, source (`web | whatsapp | manual`), notes. Serves both verticals; autos rows will start life as `inquiry` (lead-capture posture).
-- `messages`: booking_id nullable, listing_id, direction, channel enum `whatsapp | web`, body, created_at — channel-agnostic per the sketch.
-- `info_items`: listing_id, question/label, answer — the per-listing knowledge base feeding AI drafts.
-- `leads`: mirror of the VenderCRM forward (store-first, forward-after flag).
+### O2. Full schema — ALL tables now, nothing retrofitted later
+§2 tables (users, owners, listings, stay_details, car_details, listing_images, locations) plus, per §3:
+- `bookings`: listing_id, guest name/phone/email, start/end (dates for stays, datetimes for cars), status `inquiry | confirmed | active | completed | cancelled`, price snapshot, extras total, discount, source `web | whatsapp | manual`, promo_code_id nullable, notes.
+- `availability_blocks`: listing_id, range, reason `owner_use | maintenance | external_ical`, source ref (#15, #2).
+- `ical_sources`: listing_id, url, label, last_synced_at, last_status; listings get an `ical_export_token` (#2).
+- `cleaning_tasks`: listing_id, booking_id nullable, status `needed | in_progress | ready`, assigned_user_id, due_by, magic token, checklist JSON, completed_at (#1, #13).
+- `task_photos`: polymorphic (cleaning task / maintenance ticket / inspection), url, caption (#1, #5, #6).
+- `maintenance_tickets`: listing_id, reported_by, description, status `open | in_progress | done`, assigned_user_id, cost nullable (#6).
+- `expenses`: listing_id, category `cleaning | supplies | repair | fuel | other`, amount, date, maintenance_ticket_id nullable, created_by (#7).
+- `supplies` + `supply_levels`: item, listing_id, qty, low_threshold (#17).
+- `inspections`: booking_id, type `pickup | return`, odometer, fuel_level, notes, damage_flag, confirmed_by_guest bool (#5).
+- `deposits`: booking_id, amount, status `held | returned | deducted`, deduction_amount, deduction_reason, linked inspection/ticket ids (#9).
+- `vehicle_reminders`: listing_id (car), type `service | insurance | registration`, due_date, due_km nullable, status `upcoming | due | done` (#14).
+- `booking_documents`: booking_id, type `cedula | passport | license | other`, file url, status `pending | verified | rejected` (#16).
+- `extras` + `booking_extras`: name, price, vertical or listing scope; join with qty (#10).
+- `promo_codes`: code, discount type/value, valid range, max_uses, used_count (#18).
+- `payment_links`: booking_id, provider label, url/reference, amount, status `pending | paid | expired`, marked_paid_by (#8).
+- `message_templates` + `scheduled_messages`: template key/body with placeholders; queue rows keyed to booking events with send_after, status `scheduled | due | sent | cancelled` (#4, #11 — review request is just another template/event).
+- `messages`: booking_id nullable, listing_id, direction, channel `whatsapp | web`, body, created_at (#20 inbox reads this).
+- `info_items`: listing_id, question, answer (AI-draft grounding).
+- `owner_statements`: owner_id, period, gross, commission, expenses, net, generated_at, html/pdf ref (#3).
+- `owner_onboarding` + `onboarding_steps`: checklist state per owner (#19).
+- `leads`: VenderCRM mirror w/ forwarded flag.
+- `activity_log`: entity, entity_id, action, user_id, timestamp — money/legal-adjacent mutations write here.
 
 ### O3. Auth + roles
-- Hand-rolled sessions (`iron-session` + bcrypt); no OAuth in v1.
-- `requireRole(session, allowed)` helper; every mutating server action/API route checks role **server-side**.
-- Owners are strictly owner-scoped: every non-admin/staff query filters `owner_id = session.user.id`.
+iron-session + bcrypt login; `requireRole(session, allowed)`; owner scoping helper used by every owner query; magic-link token auth for cleaner task pages. Seed super_admin from env on first run.
 
-### O4. Booking/calendar engine
-- Availability computation per listing (confirmed/active bookings block dates); overlap-rejection on create/confirm — enforced in the data layer, in one place.
-- Booking state transitions with validation (`inquiry → confirmed → active → completed`, cancel from any pre-completed state).
-- Earnings/occupancy aggregation queries (feeds dashboard + monthly reports).
+### O4. Booking + availability engine (single source of truth)
+Availability = confirmed/active bookings + availability_blocks (incl. iCal-imported). Overlap rejection enforced in the data layer in ONE function used by web requests, admin manual bookings, and iCal import alike. State machine with validated transitions. Price calc = base × units + extras − promo discount; snapshot stored on the booking. **This engine and the commission math are "bad foundation" territory — get them right, test them.**
 
-### O5. Public data layer
-- Published-only listing queries: filter by vertical, location, price, capacity/specs; paginated. All in `src/db/queries/` — Sonnet's pages call functions, never write Drizzle directly.
-- Slug detail lookup; availability lookup for the stay booking-request form.
+### O5. iCal sync (#2)
+`scripts/sync-ical.ts`: fetch each `ical_sources` URL, upsert `availability_blocks` (source `external_ical`), remove stale ones; runnable manually and cron-ready. Export route `/api/ical/[token].ics` serving our confirmed bookings + blocks. Unit-test date parsing (all-day vs datetime, TZ).
 
-### O6. Messaging, leads, AI drafts
-- `POST /api/leads`: validate → store → forward to VenderCRM (per `vendercrm-lead-capture`); CRM failure never loses the lead. Booking requests create a `bookings` row (`inquiry`) + lead.
-- Message log CRUD (staff/owner record WhatsApp exchanges against a booking; channel field ready for future WhatsApp API integration — the integration itself is Backlog).
-- AI reply drafting: server action that takes an inbound question + the listing's `info_items` and returns a suggested reply (Claude API, per `claude-api` skill conventions); human approves/edits — no auto-send.
+### O6. Ops engine (#1, #6, #7, #13, #17)
+Booking completed/checkout ⇒ auto-create cleaning task. Magic-link mobile task page: checklist, photo upload, status advance; listing not bookable-ready until `ready` (stays). Maintenance tickets CRUD + photo + cost ⇒ auto-create linked expense. Day-roster query (tasks by assignee/date) + completed-jobs-per-cleaner count. Supplies decrement hook on task completion + low-stock query.
 
-### O7. Owner dashboard + admin (functional, undesigned)
-- `/panel` (owner): calendar view data, upcoming bookings, earnings summary, own listings CRUD (draft → publish request or direct publish — decide in-window, document in §6), `info_items` editor.
-- `/admin` (staff/admin): all listings both verticals, all bookings, all owners, all leads/messages, user management (admin only). One route per entity, shared table component, one form component for create+edit. No generic CMS abstraction.
-- Image upload for listings (choose mechanism in-window; document in §6).
-- Monthly owner report generation: a `scripts/report-monthly.ts` producing the per-owner summary (data + plain rendering; Sonnet formats it) — cron wiring is Backlog.
+### O7. Money engine (#3, #8, #9, #10, #18)
+Commission calc per completed booking (listing override → owner default). Monthly statement generator `scripts/generate-statements.ts` (gross − commission − expenses = net; idempotent per owner+period; plain HTML render — Sonnet styles it). Payment-link records + manual mark-paid. Deposits lifecycle linked to inspections/tickets. Extras + promo validation inside the O4 price calc.
 
-### O8. Bare functional pages
-- Unstyled but working: home, `/alojamientos` + `/autos` browse with filters, listing detail with booking-request/lead form, owner login + panel, admin. Enough to prove every flow end-to-end; zero design effort.
+### O8. Autos protection (#5, #14, #16)
+Inspection forms (pickup/return) with photos, odometer, fuel; damage flag can open a maintenance ticket + deposit deduction. Vehicle reminders CRUD + "due soon" admin query. Booking document upload + verification status gate (car booking can't confirm while docs `pending` — admin can override, logged).
 
-### O9. Exit criteria — Window 1 done when:
-- `npm run build` green.
-- Seed script: 1 admin, 1 staff, 2 owners, ~8 stay + ~6 car listings across ≥3 locations, sample bookings in various states.
-- Provable locally: owner login → edit own listing only; admin sees all; publish → appears publicly; booking request → `inquiry` + lead stored (+ CRM forward attempted); overlap rejected; AI draft returns grounded answer; report script outputs correct numbers.
-- Section 6 handoff notes written. Commit + push.
+### O9. Comms engine (#4, #11, #20 + AI drafts)
+Seeded es-PY (voseo) `message_templates` incl. review-request. Booking transitions enqueue `scheduled_messages`; `scripts/process-messages.ts` flips due rows; admin outbox lists due messages with rendered body + wa.me deep link + mark-sent. Unified inbox query (latest thread per booking/listing). AI draft server action: inbound question + listing `info_items` → suggested reply via Claude API (per `claude-api` skill; use current model ids; graceful no-key fallback). Human approves; no auto-send.
+
+### O10. Dashboards + CRM (#12, #15, #19)
+Analytics queries: occupancy %, revenue per listing, fleet utilization, top locations, booking sources, expense ratio (data layer + minimal admin page; Sonnet designs it). Owner panel: calendar data, upcoming bookings, earnings, own-listing CRUD, info-base editor, block-dates action, statements list. Onboarding checklist CRUD. `POST /api/leads` store-first → VenderCRM forward (booking inquiries also create leads).
+
+### O11. Functional pages (zero design effort)
+Unstyled but working: home, `/alojamientos` + `/autos` browse w/ filters, listing detail w/ availability + booking-request/lead form, owner login + panel, admin (one route per entity, shared table + form components), cleaner task page. Public queries live in `src/db/queries/` — Sonnet never writes Drizzle.
+
+### O12. Verification + exit criteria (Window 1 done when ALL pass)
+- `npm run build` green; a `scripts/verify-core.ts` (or test suite) proving: overlap rejection (incl. iCal block), price calc w/ extras+promo, commission math, statement idempotency, role scoping (owner A cannot read/mutate owner B), cleaning task auto-creation, deposit deduction flow.
+- Seed: 1 super_admin, 1 admin, 2 owners (one with a casa + an auto — proving dual ownership), 1 cleaner, ~8 stays + ~6 cars across ≥3 locations w/ barrios, bookings in all states, sample tasks/tickets/expenses/templates.
+- Every §3 feature reachable end-to-end through the ugly UI.
+- §9 handoff notes written; `KNOWN-ISSUES.md` current; PR created and merged green per §4.
 
 ---
 
-## 5. Window 2 — Sonnet tasks (in order)
+## 6. Window 2 — SONNET (all UI, SEO, content, imagery, deploy)
 
-### S1. Read handoff
-- Read §6 + skim `src/db/schema.ts` and `src/db/queries/`. **Do not change schema, auth, or booking-engine logic** — log needed changes in Backlog and work around.
+Prompt file: `prompts/PROMPT-2-SONNET.md`. Hard limits from §4.7 apply.
 
-### S2. Design system + public UI
-- Apply `web-design-system`; mobile-first (PY traffic is heavily mobile).
-- Pages: home (dual-vertical hero, featured listings, location links), `/alojamientos` and `/autos` browse + filter UI, listing detail (gallery, key facts per vertical, availability, WhatsApp CTA + booking-request form), location landing pages `/[vertical]/[city]` and `/[vertical]/[city]/[barrio]`, English `/en/rent-car-paraguay` landing page, about/contact, 404.
-- Listing card per vertical (stay: price/night, guests, beds, barrio; car: price/day, make/model/year, transmission).
+### S1. Orientation
+Read §9 handoff + `KNOWN-ISSUES.md`, skim schema + `src/db/queries/`. Fix Window-1 known issues only if UI-layer; else leave logged.
 
-### S3. Imagery
-- Fill declared image slots via `higgsfield-web-imagery` pipeline (scripted fetch/convert/place; no hand-edited filenames/alt).
+### S2. Design system + public site
+`web-design-system` conventions, mobile-first (PY traffic is mobile-heavy). Home (dual-vertical hero, featured, location links) · browse pages w/ filter UI per vertical · listing detail (gallery, typed key facts — casa/depto: dormitorios/baños/huéspedes/m²; auto: marca/modelo/año/caja/combustible —, availability calendar, extras picker, WhatsApp CTA + booking-request form, cancellation policy display) · location landing pages `/[vertical]/[ciudad]` + `/[vertical]/[ciudad]/[barrio]` · `/en/rent-car-paraguay` · about/contact · 404.
 
-### S4. SEO + content
-- es-PY voseo copy sitewide ("alquilá tu auto…"); per-route metadata, OG images, `sitemap.xml` (including all location pages), `robots.txt`, JSON-LD (`Product`/`Vehicle` for cars, `LodgingBusiness`/`Accommodation` for stays), canonicals on filtered views.
-- Location landing pages target the "cerca de mi" / named-location patterns from the keyword research (alquileres, alquiler de departamentos/casas, alquiler de autos asunción…).
+### S3. Panel + admin + cleaner UI polish
+Owner panel: calendar rendering, earnings cards, statements list, block-dates UX, onboarding progress. Admin: all entities styled, analytics dashboard (use `dataviz` skill), unified inbox w/ AI-draft button, outbox w/ wa.me one-tap, due-reminders list, low-stock list. Cleaner magic-link page: big touch targets, camera-friendly photo upload, offline-tolerant basics. Style the owner statement HTML (WhatsApp-shareable/email-ready).
 
-### S5. Owner dashboard + admin polish
-- Style `/panel` and `/admin`: calendar rendering, earnings cards, empty states, toasts, form validation messages. Format the monthly owner report (clean WhatsApp-shareable/email HTML rendering of O7's data).
+### S4. Imagery
+`higgsfield-web-imagery` pipeline for all declared slots (scripted fetch/convert/place; no hand-edited filenames/alt).
+
+### S5. SEO + content
+es-PY voseo copy sitewide ("alquilá tu auto…"). Per-route metadata, OG images, sitemap incl. all location pages, robots, JSON-LD (stays: `LodgingBusiness`/`Accommodation`; cars: `Product`/`Vehicle`), canonicals on filtered views. Target keyword-research patterns: "alquileres cerca de mi", "alquiler de departamentos/casas", "alquiler de autos asunción", English "rent car paraguay/asuncion".
 
 ### S6. Deploy
-- Follow `nextjs-deploy-hostinger` §1 (Git deploy) + §6a (MySQL init, Remote MySQL whitelist, tsx `.env` gotcha). Env vars from `.env.example`. Migrations + seed on production DB.
-- Domain wiring: alquilar.com.py primary; rent.com.py → 301 to `/autos` (English landing page reachable).
-- Live smoke test: browse both verticals, detail, booking request → lead in VenderCRM, owner login owner-scoped, admin login, report script against prod data.
+`nextjs-deploy-hostinger` §1 + §6a (Git deploy, MySQL init, Remote MySQL whitelist, tsx `.env` gotcha). Env from `.env.example`; migrations + seed on prod DB. Domains: alquilar.com.py primary; rent.com.py → 301 `/autos`. Document cron setup for `sync-ical` / `process-messages` / `generate-statements` (hourly / 15min / monthly) — if Hostinger cron can't be configured from the session, write exact instructions for Anton in `KNOWN-ISSUES.md` instead of stopping.
 
-### S7. Exit criteria — Window 2 done when:
-- Live on alquilar.com.py, build green, real-viewport mobile check, Lighthouse sanity pass, rent.com.py redirect verified, Backlog updated with everything deferred.
+### S7. Exit criteria (Window 2 done when ALL pass)
+Live site green build; real-viewport mobile check; Lighthouse sanity pass; live smoke test (browse both verticals, detail, booking request → lead stored + CRM attempted, owner login scoped, admin login, cleaner magic link, statement render); redirect verified; `KNOWN-ISSUES.md` + §10 Backlog updated; PR created and merged green per §4.
 
 ---
 
-## 6. Handoff notes (Opus writes this at end of Window 1)
+## 7. What Anton provides (the ONLY expected human inputs)
 
-_Empty until Window 1 completes. Must cover: final schema summary + any deviations from §O2, route map, local run instructions (env, seed), image-upload mechanism chosen, owner publish flow chosen (direct vs approval), anything else Sonnet must not break._
+Have these ready so neither window stalls: Hostinger MySQL `DATABASE_URL` (+ Remote MySQL whitelist), VenderCRM tenant API key + endpoint URL, `ANTHROPIC_API_KEY`, Hostinger deploy access (Git integration on the account) and domain/DNS control for alquilar.com.py + rent.com.py, GBP review link (can come later — env var). Missing values follow §4.5 (build continues, feature degrades gracefully).
 
----
+## 8. Still open (business, not build — parked in Backlog)
+Car-intermediary legal input (unlocks full autos online booking) · defensive domains alquileres.com.py / rentar.com.py · portfolio overlap check vs residency-services content.
 
-## 7. Backlog (append here instead of scope-creeping)
+## 9. Handoff notes (Opus writes at end of Window 1)
+_Empty until Window 1 completes. Must cover: schema deviations from §5.O2 + why, route map, local run instructions (env, migrate, seed, scripts), image-upload mechanism chosen, owner publish flow chosen (direct vs approval), in-plan judgment calls made under §4.4, anything Sonnet must not break._
 
-- Legal input on car-rental intermediary liability in PY → unlocks full autos booking flow (sketch §6.3)
-- Defensive domain registrations: alquileres.com.py, rentar.com.py (business task)
-- Portfolio overlap check vs residency-services content (sketch §6.5)
-- WhatsApp Business API integration (v1 logs messages manually)
-- Cron wiring for monthly reports (v1: run script manually)
-- Airbnb/channel-manager via paid PMS (deferred per sketch until a paying customer needs it)
-- Payments/escrow, reviews/trust — the move from model (b) to (a)
-- Renter accounts / saved searches
-- Map-based search UI (lat/lng columns exist)
+## 10. Backlog (append; never build unplanned)
+- Car legal / full autos booking flow · WhatsApp Business API auto-send · payment gateway integration (v1 is link+manual status) · Airbnb PMS/channel manager · escrow/reviews/renter accounts (model (a)) · map search UI · defensive domains · GBP content loop (`gbp-optimizer`) after launch
