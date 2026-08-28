@@ -37,6 +37,7 @@ imports `dotenv/config` on its first line.
 | `npm run verify:core` | `scripts/verify-core.ts` — auth, roles, scoping, booking, iCal, money, operations |
 | `npm run sync:ical` | Import every active iCal source (#2) — idempotent, cron-ready |
 | `npm run statements` | Generate monthly owner statements (#3) — idempotent, cron-ready |
+| `npm run messages` | Flip due scheduled messages (#4) — idempotent, cron-ready (`-- --dry` reports without writing) |
 
 ### Cron jobs
 
@@ -44,6 +45,7 @@ imports `dotenv/config` on its first line.
 |---|---|
 | `npm run sync:ical` | hourly |
 | `npm run statements` | monthly, on the 1st (defaults to the previous month) |
+| `npm run messages` | every 15 minutes |
 
 Both accept arguments: `npm run sync:ical -- 12` syncs only source 12;
 `npm run statements -- 2026-07 3` regenerates July 2026 for owner 3. Re-running
@@ -56,6 +58,7 @@ either is always safe.
 | `/api/ical/<token>.ics` | Per-listing availability feed for Airbnb/Booking/Google. The token is the credential; the feed carries no guest data. |
 | `/api/estados/<id>.html` | Owner statement as HTML. Admins see all; an owner sees only their own. |
 | `/api/uploads/<folder>/<file>` | Photos attached to cleaning tasks, tickets, inspections and renter documents. The random filename is the credential (see `KNOWN-ISSUES.md`). |
+| `POST /api/leads` | Public lead capture. Stores the lead first, then offers it to VenderCRM. Accepts JSON or a form post; `website` is a honeypot. Always answers `{ok:true}` once stored. |
 
 ## Operations screens (phase O-3)
 
@@ -65,11 +68,41 @@ either is always safe.
 | `/admin/limpieza` | admin | Day roster, assignment, jobs per cleaner, low stock |
 | `/admin/mantenimiento` | admin | Tickets (a cost creates its expense) and expenses |
 | `/admin/flota` | admin | Vehicle reminders due soon, damage log, document queue |
-| `/admin/reservas/<id>` | admin | Renter documents + gate, handover inspections, deposit |
+| `/admin/reservas/<id>` | admin | Renter documents + gate, handover inspections, deposit, payment links, message sequence |
 
 Photo uploads are written to `UPLOAD_DIR` (default `.uploads/`, git-ignored) and
 served back through `/api/uploads/...`. Point it outside the Git working tree in
 production, or a deploy will wipe it.
+
+## Public pages (phase O-4)
+
+| Route | What |
+|---|---|
+| `/` | Both verticals, featured listings, location links |
+| `/alojamientos` · `/autos` | Browse with GET filters (`ubicacion`, `tipo`, `huespedes`, `dormitorios`, `asientos`, `min`, `max`, `orden`) |
+| `/publicacion/<slug>` | Detail: typed facts, occupied dates, extras, cancellation policy, WhatsApp CTA, booking-request form |
+
+Only `published` listings resolve on the public side — the check lives in
+`browseListings` / `getPublicListing`, not in the pages.
+
+## Panel and admin screens (phase O-4)
+
+| Route | Who | What |
+|---|---|---|
+| `/panel` | owner, admin | Calendar, upcoming bookings, earnings, listings, blocked dates (#15), statements, onboarding |
+| `/panel/publicaciones/<id>` | owner, admin | Listing editor, info base (what the AI draft is grounded in), iCal import/export (#2) |
+| `/admin` | admin | Today's backlog and the map of every screen |
+| `/admin/mensajes` | admin | Outbox: rendered body, wa.me link, mark-sent (#4, #11) |
+| `/admin/inbox` | admin | Unified inbox with the inline AI-draft button (#20) |
+| `/admin/analitica` | admin | Occupancy, revenue, fleet utilisation, sources, expense ratio (#12) |
+| `/admin/propietarios` | admin | Owner onboarding pipeline (#19) |
+| `/admin/leads` | admin | Leads and their CRM forward status |
+| `/admin/plantillas` | admin | Message templates and when each one fires |
+| `/admin/dinero` | admin | Payment links (#8), statement generation (#3), the extras (#10) and promo-code (#18) catalogues |
+| `/admin/publicaciones` · `/admin/reservas` · `/admin/usuarios` | admin | Entity lists |
+
+**Nothing sends a message on its own** (plan §1.5). The engine decides what to
+say and when it is due; a person taps the wa.me link and marks it sent.
 
 ## Seed logins
 
@@ -109,6 +142,9 @@ src/lib/cleaning.ts    turnover checklist + cleaning status machine — pure
 src/lib/documents.ts   the renter-document gate — pure
 src/lib/reminders.ts   fleet reminder thresholds — pure
 src/lib/uploads.ts     photo storage (server) over uploads-core.ts (pure)
+src/lib/messaging.ts   message schedule anchors, rendering, wa.me links — pure
+src/lib/ai-draft.ts    the Claude call behind the draft button (server only)
+src/lib/vendercrm.ts   VenderCRM forwarding — holds the API key, server only
 messages/              es + en dictionaries
 scripts/               idempotent jobs (migrate, seed, verify)
 ```

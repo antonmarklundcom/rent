@@ -129,3 +129,17 @@ export async function releasePromoUse(
     .set({ usedCount: sql`greatest(${promoCodes.usedCount} - 1, 0)` })
     .where(eq(promoCodes.id, promoId));
 }
+
+/* -------------------------------------------------------------------------- */
+/* Admin reads (#10, #18) — what is on offer and what has been used            */
+/* -------------------------------------------------------------------------- */
+
+/** Every extra, including inactive ones — the admin catalogue. */
+export async function listAllExtras(executor: Executor = db) {
+  return executor.select().from(extras).orderBy(asc(extras.scope), asc(extras.name));
+}
+
+/** Every promo code with its usage — `used_count` is claimed at booking (#18). */
+export async function listPromoCodes(executor: Executor = db) {
+  return executor.select().from(promoCodes).orderBy(asc(promoCodes.code));
+}

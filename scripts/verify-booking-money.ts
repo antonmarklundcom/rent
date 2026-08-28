@@ -25,7 +25,9 @@ import {
   listings,
   owners,
   ownerStatements,
+  messages,
   paymentLinks,
+  scheduledMessages,
   promoCodes,
   stayDetails,
   users,
@@ -78,6 +80,10 @@ async function teardown(): Promise<void> {
     ).map((row) => row.id);
     if (bookingIds.length > 0) {
       await db.delete(bookingExtras).where(inArray(bookingExtras.bookingId, bookingIds));
+      // Confirming a booking enqueues its message sequence (phase O-4), so
+      // these fixtures leave queue rows behind too.
+      await db.delete(scheduledMessages).where(inArray(scheduledMessages.bookingId, bookingIds));
+      await db.delete(messages).where(inArray(messages.bookingId, bookingIds));
       await db.delete(deposits).where(inArray(deposits.bookingId, bookingIds));
       await db.delete(paymentLinks).where(inArray(paymentLinks.bookingId, bookingIds));
     }

@@ -98,24 +98,6 @@ export async function getBlockById(blockId: number, executor: Executor = db) {
   return row ?? null;
 }
 
-export async function listBlocksForListing(
-  listingId: number,
-  window?: DateRange,
-  executor: Executor = db,
-) {
-  return executor
-    .select()
-    .from(availabilityBlocks)
-    .where(
-      and(
-        eq(availabilityBlocks.listingId, listingId),
-        window ? lt(availabilityBlocks.startAt, window.endAt) : undefined,
-        window ? gt(availabilityBlocks.endAt, window.startAt) : undefined,
-      ),
-    )
-    .orderBy(asc(availabilityBlocks.startAt));
-}
-
 /* -------------------------------------------------------------------------- */
 /* iCal-imported blocks (#2)                                                   */
 /* -------------------------------------------------------------------------- */
@@ -265,4 +247,94 @@ export async function recordIcalSyncResult(
     .update(icalSources)
     .set({ lastSyncedAt: new Date(), lastStatus: status.slice(0, 255) })
     .where(eq(icalSources.id, sourceId));
+}
+
+/* -------------------------------------------------------------------------- */
+/* iCal source CRUD (#2) — the owner-facing half of the import                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Register an external calendar to import from.
+ *
+ * The URL is the credential to somebody else's calendar, so it is validated as
+ * http(s) here rather than at the form: a `file://` or `javascript:` URL would
+ * be handed straight to `fetch` by `scripts/sync-ical.ts`.
+ */
+export async function createIcalSource(
+  input: { listingId: number; url: string; label?: string | null },
+  actor?: SessionUser | null,
+  executor: Executor = db,
+): Promise<number> {
+  const url = input.url.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new DomainError("La dirección del calendario no es válida", "invalid_range", { url });
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new DomainError("El calendario tiene que ser una URL http(s)", "invalid_range", { url });
+  }
+  const [inserted] = await executor
+    .insert(icalSources)
+    .values({
+      listingId: input.listingId,
+      url: url.slice(0, 700),
+      label: input.label?.trim().slice(0, 120) || null,
+    })
+    .$returningId();
+  await logActivity(
+    {
+      entity: "ical_source",
+      entityId: inserted!.id,
+      action: "ical_source.created",
+      userId: actor?.id ?? null,
+      meta: { listingId: input.listingId, host: parsed.host },
+    },
+    executor,
+  );
+  return inserted!.id;
+}
+
+export async function getIcalSource(sourceId: number, executor: Executor = db) {
+  const [row] = await executor
+    .select()
+    .from(icalSources)
+    .where(eq(icalSources.id, sourceId))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Remove a source and the blocks it imported.
+ *
+ * Leaving the blocks behind would keep dates unavailable with nothing left to
+ * explain why, and no way to release them from the panel.
+ */
+export async function deleteIcalSource(
+  sourceId: number,
+  actor?: SessionUser | null,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(icalSources)
+      .where(eq(icalSources.id, sourceId))
+      .limit(1);
+    if (!row) throw new DomainError("Ese calendario no existe", "not_found", { sourceId });
+    await tx
+      .delete(availabilityBlocks)
+      .where(eq(availabilityBlocks.icalSourceId, sourceId));
+    await tx.delete(icalSources).where(eq(icalSources.id, sourceId));
+    await logActivity(
+      {
+        entity: "ical_source",
+        entityId: sourceId,
+        action: "ical_source.deleted",
+        userId: actor?.id ?? null,
+        meta: { listingId: row.listingId },
+      },
+      tx,
+    );
+  });
 }
