@@ -88,6 +88,16 @@ export const ONBOARDING_STEP_STATUSES = ["pending", "done", "skipped"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 export type Vertical = (typeof VERTICALS)[number];
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
+export type PriceUnit = (typeof PRICE_UNITS)[number];
+export type ListingStatus = (typeof LISTING_STATUSES)[number];
+export type CancellationPolicy = (typeof CANCELLATION_POLICIES)[number];
+export type BookingSource = (typeof BOOKING_SOURCES)[number];
+export type BlockReason = (typeof BLOCK_REASONS)[number];
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+export type DepositStatus = (typeof DEPOSIT_STATUSES)[number];
+export type DiscountType = (typeof DISCOUNT_TYPES)[number];
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+export type ExtraScope = (typeof EXTRA_SCOPES)[number];
 
 /* -------------------------------------------------------------------------- */
 /* People                                                                      */

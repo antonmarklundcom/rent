@@ -264,5 +264,69 @@ image-upload mechanism, owner publish flow (direct vs admin approval).
 `src/lib/scope.ts`, `src/lib/money.ts`, and `scripts/`. All Drizzle stays in
 `src/db/queries/`.
 
+### Phase O-2 — Booking & money engine (O4, O5, O7) — merged as PR #PRNUM
+
+**2026-08-28 — O-2 merged.** The booking/availability engine, iCal sync and the
+money engine now exist. **One** overlap function
+(`src/db/queries/availability.ts` → `findConflicts` / `assertAvailable`) serves
+web requests, admin manual bookings, owner blocked dates and the iCal importer
+alike; it runs under `FOR UPDATE` inside the same transaction as its insert, so
+the check and the write cannot be interleaved. Price, promo, extras and
+commission live in the pure `src/lib/pricing.ts`; the booking state machine in
+`src/lib/booking-state.ts`; half-open ranges in `src/lib/dates.ts`; iCal
+parse/generate in `src/lib/ical.ts`. Next phase (O-3) starts at
+`src/db/queries/bookings.ts` (`transitionBooking` is where checkout must
+auto-create a cleaning task) and `src/db/queries/deposits.ts` (`deductDeposit`
+already accepts the inspection/ticket ids O-3 will supply).
+
+**What now exists**: query layer `src/db/queries/{availability,bookings,blocks,extras,deposits,payments,statements,activity}.ts` ·
+libs `src/lib/{dates,booking-state,pricing,ical,errors,statement-html}.ts` ·
+actions `src/app/actions/{bookings,money}.ts` (every mutation behind
+`requireRole` + owner scoping) · routes `/api/ical/[token].ics` (public, token
+is the credential, no guest data in the feed) and `/api/estados/[id].html`
+(admin or the owning owner) · scripts `sync-ical.ts` and
+`generate-statements.ts`, both idempotent and cron-ready · tests
+`scripts/verify-logic.ts` (112 checks, **no database needed**) and
+`scripts/verify-booking-money.ts` (91 checks, called by `verify-core.ts`, builds
+and tears down its own fixtures). `npm run verify` runs both: 112 + 124.
+
+**Decisions/deviations made under §4.4** (none needed Anton):
+
+1. **`completed` bookings occupy the calendar**, not only `confirmed | active`
+   as §5.O4 words it. A finished stay physically held the listing; letting a new
+   booking overlap it would corrupt occupancy/revenue analytics (§5.O10) and
+   allow a back-dated double sale. The change only ever makes the engine
+   stricter. `OCCUPYING_STATUSES` in `src/lib/booking-state.ts` is the one place
+   it is defined.
+2. **A promo discount applies to the BASE total only**, never to extras — a
+   percentage code must not give away a transfer or a GPS. Clamped to the base,
+   so a fixed code larger than the stay can never produce a negative total.
+3. **Commission is charged on OWNER GROSS = base − discount.** Extras are the
+   operator's own service revenue: they are neither paid out to the owner nor
+   commissioned. Isolated in `COMMISSION_BASE()` (`src/lib/pricing.ts`) so
+   revisiting it is a one-line change plus a re-generation of unbilled
+   statements, not a rewrite.
+4. **A promo use is claimed at booking creation and released on cancellation**,
+   via a conditional `UPDATE` that cannot push `used_count` past `max_uses`.
+5. **An `inquiry` does not hold dates.** A guest may always ask about occupied
+   dates (it is a lead); availability is enforced at confirmation, where the
+   commission rate is also re-resolved — an inquiry can sit for weeks.
+6. **A statement bills a booking in the period its `end_at` falls in**, and only
+   `completed` bookings. Idempotency comes from the `(owner_id, period)` unique
+   key plus `expenses.statement_id`: regeneration releases its own stamps and
+   re-claims them, so ten runs produce identical totals.
+7. **`/api/ical/[token]` accepts the token with or without `.ics`** — calendar
+   clients disagree about keeping the extension.
+8. **Deposits and payment links are terminal once settled.** Re-settling raises
+   `already_settled` rather than overwriting; a correction is a new record.
+
+**Schema**: no shape change. Ten enum *types* were exported from
+`src/db/schema.ts` (`PriceUnit`, `BlockReason`, …) so app code stops re-typing
+literal unions — additive, no migration.
+
+**Seed additions**: a `commission_pct` override on one listing, one (inactive)
+`ical_sources` row, and commission snapshots on the seeded bookings so demo data
+matches what the engine produces.
+
 ## 10. Backlog (append; never build unplanned)
 - Car legal / full autos booking flow · WhatsApp Business API auto-send · payment gateway integration (v1 is link+manual status) · Airbnb PMS/channel manager · escrow/reviews/renter accounts (model (a)) · map search UI · defensive domains · GBP content loop (`gbp-optimizer`) after launch
