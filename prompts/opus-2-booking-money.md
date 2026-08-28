@@ -11,3 +11,6 @@ Phase rules:
 - Minor issues → `KNOWN-ISSUES.md`, keep going. Stop only per §4.4.
 
 Exit: build green, all O-1 checks still pass, new tests prove overlap rejection (incl. iCal blocks), price/commission math, statement idempotency, deposit lifecycle. PR merged green. Report pass/fail checklist + judgment calls (also to §9).
+
+## After this phase — chain to the next (same model)
+When this phase's PR is merged green and the exit checklist fully passes: run the **pre-chain audit** in plan.md §4.8 (re-run build + verify scripts, adversarially re-read your merged diff, fix findings), then open `prompts/opus-3-operations.md` and continue it in THIS same session — the next phase uses the same model. Stop instead of chaining only if a §4.4 condition arose or this phase's exit bar isn't fully met. If the session ends mid-chain, Anton re-pastes the unfinished phase's prompt in a fresh window and it resumes (§4.6).

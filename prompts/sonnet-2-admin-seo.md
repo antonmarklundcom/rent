@@ -13,3 +13,6 @@ Phase rules:
 - Re-runnable; minor issues → `KNOWN-ISSUES.md`; stop only per §4.4.
 
 Exit: build green, earlier checks pass, admin/panel/cleaner surfaces styled, SEO artifacts verified present, `/en` public site complete, PR merged green. Report pass/fail checklist.
+
+## After this phase — chain to the next (same model)
+When this phase's PR is merged green and the exit checklist fully passes: run the **pre-chain audit** in plan.md §4.8 (re-run build + verify scripts, adversarially re-read your merged diff, fix findings), then open `prompts/sonnet-3-deploy.md` and continue it in THIS same session — the next phase uses the same model. Stop instead of chaining only if a §4.4 condition arose or this phase's exit bar isn't fully met. If the session ends mid-chain, Anton re-pastes the unfinished phase's prompt in a fresh window and it resumes (§4.6).

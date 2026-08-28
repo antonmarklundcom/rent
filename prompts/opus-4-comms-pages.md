@@ -11,3 +11,6 @@ Phase rules:
 - Re-runnable; minor issues → `KNOWN-ISSUES.md`; stop only per §4.4.
 
 Exit: every §5.O12 criterion passes, §9 written, PR merged green. Report the full checklist pass/fail and anything Sonnet must know beyond §9.
+
+## After this phase — STOP (model switch)
+This is the final Opus phase. The next phase (S-1) uses SONNET — do NOT continue past this phase. Run the pre-chain audit from plan.md §4.8 on your merged work anyway (it is the handoff quality gate), finish §9, and end with your report so Anton can start the Sonnet chain.

@@ -10,3 +10,6 @@ Phase rules:
 - Re-runnable; minor issues → `KNOWN-ISSUES.md`; stop only per §4.4.
 
 Exit: build green, earlier checks pass, verify additions prove: task auto-creation, magic-link auth (token grants exactly one task, nothing else), expense linkage, deduction flow, doc gate. PR merged green. Report pass/fail checklist + judgment calls (also to §9).
+
+## After this phase — chain to the next (same model)
+When this phase's PR is merged green and the exit checklist fully passes: run the **pre-chain audit** in plan.md §4.8 (re-run build + verify scripts, adversarially re-read your merged diff, fix findings), then open `prompts/opus-4-comms-pages.md` and continue it in THIS same session — the next phase uses the same model. Stop instead of chaining only if a §4.4 condition arose or this phase's exit bar isn't fully met. If the session ends mid-chain, Anton re-pastes the unfinished phase's prompt in a fresh window and it resumes (§4.6).
