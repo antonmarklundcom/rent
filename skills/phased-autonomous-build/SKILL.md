@@ -50,8 +50,9 @@ Include a phase table in the header: phase id, model, prompt file, plan sections
 5. Missing env values never block: document in `.env.example`, degrade gracefully.
 6. Every phase prompt is re-runnable: check what exists on the branch first, continue from the first unmet exit criterion.
 7. Model-B hard limits (no foundation changes; workaround + Backlog note instead).
-8. **Phase handoff** — hand off only when four gates pass: PR merged green; exit checklist passed; **pre-handoff audit** done (re-run build + verify scripts, adversarially re-read your own merged diff, fix findings — a defect merged now poisons every later phase and this is the last cheap moment to catch it); build-log entry committed. Then spawn the next phase as a NEW session via the claude-code-remote `create_session` tool: inherit environment and permission mode (never `plan` — an unattended plan-mode child stalls forever), set `model` per the phase table (this crosses the model switch automatically), `prompt` exactly `Read prompts/<next-file>.md in this repo and execute it.` Then end with the phase report. Fallback when `create_session` is unavailable (local CLI): continue in the same window if the next phase uses the same model; stop and report at a model switch.
-9. **Build log**: before merging, append a 5–10 line dated entry to plan §9 — phase id + PR, what now exists, decisions/deviations, where the next phase should look first. Fresh sessions orient from plan.md + §9 + KNOWN-ISSUES.md ONLY; this log is what keeps them cheap.
+8. **Model cost guardrail** — Fable (`claude-fable-5` / Mythos-class models) is NEVER used for build phases, subagents, or spawned sessions. Phase tables only ever name Opus and Sonnet. If a session believes Fable is genuinely needed for something, it stops and asks Anton first with the reason — spawning Fable without explicit approval is treated like a destructive action, because it burns limited usage. Fable's only role in this method is the human-driven planning conversation Anton starts himself.
+9. **Phase handoff** — hand off only when four gates pass: PR merged green; exit checklist passed; **pre-handoff audit** done (re-run build + verify scripts, adversarially re-read your own merged diff, fix findings — a defect merged now poisons every later phase and this is the last cheap moment to catch it); build-log entry committed. Then spawn the next phase as a NEW session via the claude-code-remote `create_session` tool: inherit environment and permission mode (never `plan` — an unattended plan-mode child stalls forever), set `model` per the phase table (this crosses the model switch automatically), `prompt` exactly `Read prompts/<next-file>.md in this repo and execute it.` Then end with the phase report. Fallback when `create_session` is unavailable (local CLI): continue in the same window if the next phase uses the same model; stop and report at a model switch.
+10. **Build log**: before merging, append a 5–10 line dated entry to plan §9 — phase id + PR, what now exists, decisions/deviations, where the next phase should look first. Fresh sessions orient from plan.md + §9 + KNOWN-ISSUES.md ONLY; this log is what keeps them cheap.
 
 ## Stage 3 — Write the prompt files
 
@@ -74,8 +75,8 @@ Phase rules:
 Exit: <concrete, checkable criteria — build green, named tests/verify checks, PR merged>.
 
 ## After this phase — hand off to the next (fresh session)
-<The §4.8 handoff block: four gates, create_session call with next file + model, fallback,
-never-hand-off conditions.>
+<The handoff rule from the autonomy protocol: four gates, create_session call with next
+file + model (Opus or Sonnet only — never Fable), fallback, never-hand-off conditions.>
 ```
 
 The last phase of each model group gets a model-switch footer (spawn the other model / stop-and-report fallback); the final phase gets a STOP footer with the closing report (live URLs, checklist, exact numbered manual steps for the user).
