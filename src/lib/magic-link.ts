@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { cleaningTasks, listings, taskPhotos } from "@/db/schema";
+import { siteUrl } from "@/lib/site-url";
 import { randomToken } from "@/lib/tokens";
 
 /**
@@ -49,6 +50,5 @@ export async function resolveMagicTaskView(token: string) {
 }
 
 export function magicLinkUrl(token: string): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  return `${base.replace(/\/$/, "")}/tarea/${token}`;
+  return siteUrl(`/tarea/${token}`);
 }

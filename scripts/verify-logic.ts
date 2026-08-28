@@ -10,6 +10,21 @@
  */
 import { CheckRunner } from "./lib/checks";
 import {
+  assertTemplateBody,
+  DEFAULT_SEQUENCE,
+  formatLocalDateTime,
+  isMessageAnchor,
+  MESSAGE_ANCHORS,
+  normalisePhone,
+  placeholdersUsed,
+  renderTemplate,
+  parseThreadKey,
+  selectSequenceFor,
+  sendAfterFor,
+  threadKey,
+  waLink,
+} from "../src/lib/messaging";
+import {
   applyChecklistUpdate,
   assertCleaningTransition,
   canAdvanceCleaning,
@@ -611,5 +626,143 @@ r.equal("una barra embebida se rechaza", resolveUploadPath(["cleaning/../../etc"
 r.equal("una ruta absoluta se rechaza", resolveUploadPath(["/etc/passwd"]), null);
 r.equal("una ruta vacía se rechaza", resolveUploadPath([]), null);
 r.equal("un nombre con espacios se rechaza", resolveUploadPath(["cleaning", "a b.jpg"]), null);
+
+r.section("Mensajería — plantillas, anclas y enlaces (O-4, #4/#11)");
+
+const seqCtx = {
+  confirmedAt: new Date("2026-03-01T12:00:00Z"),
+  startAt: new Date("2026-03-10T17:00:00Z"),
+  endAt: new Date("2026-03-14T14:00:00Z"),
+};
+r.equal(
+  "el ancla `confirmed` con offset 0 es el instante de la confirmación",
+  sendAfterFor("confirmed", 0, seqCtx).toISOString(),
+  "2026-03-01T12:00:00.000Z",
+);
+r.equal(
+  "pre-arrival es 24 h antes de la llegada",
+  sendAfterFor("start_at", -1440, seqCtx).toISOString(),
+  "2026-03-09T17:00:00.000Z",
+);
+r.equal(
+  "el pedido de reseña es 24 h después de la salida",
+  sendAfterFor("end_at", 1440, seqCtx).toISOString(),
+  "2026-03-15T14:00:00.000Z",
+);
+r.check("los tres anclas son anclas", MESSAGE_ANCHORS.every((a) => isMessageAnchor(a)));
+r.check("`post_stay` (placeholder de O-1) no lo es", !isMessageAnchor("post_stay"));
+r.check("null tampoco", !isMessageAnchor(null));
+
+const rendered = renderTemplate("Hola {{guestName}}, {{listingTitle}} — {{reference}}", {
+  guestName: "Ana",
+  listingTitle: "Casa del lago",
+  reference: "ALQ-TEST",
+});
+r.equal("se sustituyen las variables", rendered.body, "Hola Ana, Casa del lago — ALQ-TEST");
+r.equal("sin faltantes", rendered.missing.length, 0);
+
+const withGap = renderTemplate("Dejanos tu reseña:\n{{reviewLink}}\n¡Gracias!", {});
+r.equal(
+  "una variable vacía se lleva su propia línea",
+  withGap.body,
+  "Dejanos tu reseña:\n¡Gracias!",
+);
+r.equal("y queda registrada como faltante", withGap.missing.join(","), "reviewLink");
+
+const typo = renderTemplate("Hola {{huesped}}", { guestName: "Ana" });
+r.equal("una variable inexistente se reporta", typo.unknown.join(","), "huesped");
+r.equal("y no se filtra al texto", typo.body, "Hola");
+r.equal(
+  "placeholdersUsed lista lo que pide una plantilla",
+  placeholdersUsed("{{guestName}} {{total}} {{guestName}}").join(","),
+  "guestName,total",
+);
+r.throws(
+  "una plantilla con una variable inventada se rechaza al guardar",
+  () => assertTemplateBody("Hola {{nombre_del_huesped}}, todo bien"),
+  "invalid_amount",
+);
+r.check(
+  "una plantilla válida se acepta",
+  (() => {
+    try {
+      assertTemplateBody("Hola {{guestName}}, tu reserva {{reference}} está confirmada.");
+      return true;
+    } catch {
+      return false;
+    }
+  })(),
+);
+
+r.equal("un 0981 paraguayo toma el 595", normalisePhone("0981 123 456"), "595981123456");
+r.equal("con +595 se respeta tal cual", normalisePhone("+595 981 123456"), "595981123456");
+r.equal("con paréntesis y guiones, lo mismo", normalisePhone("(0981) 123-456"), "595981123456");
+r.equal("sin prefijo nacional también", normalisePhone("981123456"), "595981123456");
+r.equal("un número absurdamente corto se descarta", normalisePhone("123"), null);
+r.equal("y uno vacío también", normalisePhone(""), null);
+r.equal("null entra, null sale", normalisePhone(null), null);
+r.equal(
+  "el enlace de WhatsApp lleva el cuerpo codificado",
+  waLink("0981123456", "Hola ¿todo bien?"),
+  "https://wa.me/595981123456?text=Hola%20%C2%BFtodo%20bien%3F",
+);
+r.equal("sin teléfono no hay enlace", waLink(null, "Hola"), null);
+
+const carSequence = selectSequenceFor(
+  DEFAULT_SEQUENCE.map((t) => ({ ...t })),
+  "car",
+);
+const staySequence = selectSequenceFor(
+  DEFAULT_SEQUENCE.map((t) => ({ ...t })),
+  "stay",
+);
+r.check(
+  "un auto recibe la pre-llegada específica de autos",
+  carSequence.some((t) => t.key === "pre_arrival_car"),
+);
+r.check(
+  "y NO recibe además la genérica — es el mismo punto de la secuencia",
+  !carSequence.some((t) => t.key === "pre_arrival"),
+);
+r.check(
+  "un alojamiento recibe la genérica",
+  staySequence.some((t) => t.key === "pre_arrival") &&
+    !staySequence.some((t) => t.key === "pre_arrival_car"),
+);
+r.equal("ambas secuencias tienen los cinco puntos de §3.D", staySequence.length, 5);
+r.equal("la de autos también", carSequence.length, 5);
+r.check(
+  "todas las plantillas por defecto usan variables válidas",
+  DEFAULT_SEQUENCE.every((t) => {
+    try {
+      assertTemplateBody(t.body);
+      return true;
+    } catch {
+      return false;
+    }
+  }),
+);
+r.check(
+  "y todas apuntan a un ancla real",
+  DEFAULT_SEQUENCE.every((t) => isMessageAnchor(t.anchor)),
+);
+r.check(
+  "el pedido de reseña es el único que usa el enlace de Google",
+  DEFAULT_SEQUENCE.filter((t) => placeholdersUsed(t.body).includes("reviewLink")).length === 1,
+);
+
+r.equal("una clave de hilo de reserva se arma", threadKey(12, 4), "b12");
+r.equal("y una de publicación sola también", threadKey(null, 7), "l7");
+r.equal("`b12` vuelve a ser una reserva", parseThreadKey("b12")?.bookingId, 12);
+r.equal("`l7` vuelve a ser una publicación", parseThreadKey("l7")?.listingId, 7);
+r.equal("una clave inventada se rechaza", parseThreadKey("x9"), null);
+r.equal("y una con id cero también", parseThreadKey("b0"), null);
+r.equal("y una vacía", parseThreadKey(""), null);
+
+r.equal(
+  "las fechas se muestran en hora de Asunción, no en UTC",
+  formatLocalDateTime(new Date("2026-03-10T17:00:00Z")),
+  "10/03/2026 14:00",
+);
 
 process.exitCode = r.summary("verificaciones de lógica pasaron") ? 1 : 0;

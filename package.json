@@ -15,9 +15,11 @@
     "verify:logic": "tsx scripts/verify-logic.ts",
     "verify:core": "tsx scripts/verify-core.ts",
     "sync:ical": "tsx scripts/sync-ical.ts",
-    "statements": "tsx scripts/generate-statements.ts"
+    "statements": "tsx scripts/generate-statements.ts",
+    "messages": "tsx scripts/process-messages.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
     "iron-session": "^8.0.4",

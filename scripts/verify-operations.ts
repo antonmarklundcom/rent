@@ -41,6 +41,8 @@ import {
   taskPhotos,
   users,
   vehicleReminders,
+  messages,
+  scheduledMessages,
 } from "../src/db/schema";
 import type { CheckRunner } from "./lib/checks";
 import { buildSessionUser, type SessionUser } from "../src/lib/auth-core";
@@ -140,6 +142,9 @@ async function teardown(): Promise<void> {
       await db.delete(deposits).where(inArray(deposits.bookingId, bookingIds));
       await db.delete(paymentLinks).where(inArray(paymentLinks.bookingId, bookingIds));
       await db.delete(bookingExtras).where(inArray(bookingExtras.bookingId, bookingIds));
+      // Phase O-4: confirming a booking queues its message sequence.
+      await db.delete(scheduledMessages).where(inArray(scheduledMessages.bookingId, bookingIds));
+      await db.delete(messages).where(inArray(messages.bookingId, bookingIds));
       await db.delete(activityLog).where(
         and(eq(activityLog.entity, "booking"), inArray(activityLog.entityId, bookingIds)),
       );
@@ -161,6 +166,7 @@ async function teardown(): Promise<void> {
           ),
         );
     }
+    await db.delete(messages).where(inArray(messages.listingId, listingIds));
     await db.delete(cleaningTasks).where(inArray(cleaningTasks.listingId, listingIds));
     await db.delete(expenses).where(inArray(expenses.listingId, listingIds));
     await db.delete(maintenanceTickets).where(inArray(maintenanceTickets.listingId, listingIds));

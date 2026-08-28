@@ -8,9 +8,14 @@
  *   npm run seed
  */
 import "dotenv/config";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { closePool, db } from "../src/db";
+import {
+  enqueueBookingMessages,
+  markDueMessages,
+  seedDefaultTemplates,
+} from "../src/db/queries/messages";
 import {
   availabilityBlocks,
   bookingDocuments,
@@ -577,6 +582,29 @@ async function main() {
       ])
       .onDuplicateKeyUpdate({ set: { sortOrder: sql`sort_order` } });
   }
+  // Cars need an info base too: the AI draft (§5.O9) is grounded on these rows
+  // and refuses to answer without them, so the autos side has to be
+  // demonstrable out of the box as well.
+  for (const listing of carRows.slice(0, 2)) {
+    await db
+      .insert(infoItems)
+      .values([
+        {
+          listingId: listing.id,
+          question: "¿Qué necesito para retirar el auto?",
+          answer:
+            "Cédula o licencia vigente y una tarjeta a nombre del conductor para el depósito en garantía.",
+          sortOrder: 0,
+        },
+        {
+          listingId: listing.id,
+          question: "¿Cuántos kilómetros por día incluye?",
+          answer: "Incluye 200 km por día; el excedente se cobra aparte al devolver el auto.",
+          sortOrder: 1,
+        },
+      ])
+      .onDuplicateKeyUpdate({ set: { sortOrder: sql`sort_order` } });
+  }
 
   /* ---------------------------------------------------- extras + promo codes */
   const extraSeeds = [
@@ -1093,51 +1121,42 @@ async function main() {
     .onDuplicateKeyUpdate({ set: { status: "pending" } });
 
   /* -------------------------------------------------------- comms templates */
+  // Phase O-4 replaces O-1's placeholders with the real plan §3.D sequence.
+  // `seedDefaultTemplates` is the single source: the same upsert an admin edit
+  // uses, so re-running the seed repairs a template without duplicating it.
+  await seedDefaultTemplates(db);
+  // O-1 seeded two templates whose trigger events are not anchors the engine
+  // understands (`check_in` / `check_out` rather than `start_at` / `end_at`).
+  // They were placeholders for this phase and nothing was ever queued from
+  // them, so they go rather than sit inert in the admin list.
   await db
-    .insert(messageTemplates)
-    .values([
-      {
-        key: "booking_confirmed",
-        locale: "es",
-        label: "Reserva confirmada",
-        body: "Hola {{guest_name}}, confirmamos tu reserva en {{listing_title}} del {{start_date}} al {{end_date}}. ¡Te esperamos!",
-        triggerEvent: "booking_confirmed",
-        offsetMinutes: 0,
-      },
-      {
-        key: "pre_arrival",
-        locale: "es",
-        label: "Un día antes de la llegada",
-        body: "Hola {{guest_name}}, mañana te esperamos en {{listing_title}}. El check-in es desde las {{check_in_time}}. Cualquier cosa escribinos por acá.",
-        triggerEvent: "pre_arrival",
-        offsetMinutes: -1440,
-      },
-      {
-        key: "check_in_day",
-        locale: "es",
-        label: "Día del check-in",
-        body: "¡Bienvenido {{guest_name}}! Ya podés ingresar a {{listing_title}}. Te paso las instrucciones de acceso.",
-        triggerEvent: "check_in",
-        offsetMinutes: 0,
-      },
-      {
-        key: "check_out_day",
-        locale: "es",
-        label: "Día del check-out",
-        body: "Hola {{guest_name}}, hoy es tu check-out hasta las {{check_out_time}}. ¡Gracias por elegirnos!",
-        triggerEvent: "check_out",
-        offsetMinutes: 0,
-      },
-      {
-        key: "review_request",
-        locale: "es",
-        label: "Pedido de reseña en Google",
-        body: "Hola {{guest_name}}, ¿nos dejás una reseña? Nos ayuda muchísimo: {{review_link}}",
-        triggerEvent: "post_stay",
-        offsetMinutes: 1440,
-      },
-    ])
-    .onDuplicateKeyUpdate({ set: { isActive: true } });
+    .delete(messageTemplates)
+    .where(inArray(messageTemplates.key, ["check_in_day", "check_out_day"]));
+
+  // Queue the sequence for every booking that is (or was) confirmed, so the
+  // outbox has something in it on a fresh install. Idempotent: the unique key
+  // on (booking_id, template_key) makes a re-seed a no-op.
+  for (const reference of ["ALQ-SEED02", "ALQ-SEED03", "ALQ-SEED06"]) {
+    const booking = bookingRows[reference]!;
+    const listing = [...stayRows, ...carRows].find((l) => l.id === booking.listingId)!;
+    await enqueueBookingMessages({
+      bookingId: booking.id,
+      reference: booking.reference,
+      guestName: booking.guestName,
+      vertical: listing.vertical,
+      listingTitle: listing.title,
+      locationName: null,
+      startAt: booking.startAt,
+      endAt: booking.endAt,
+      total: booking.total,
+      currency: booking.currency,
+      units: booking.units,
+      confirmedAt: new Date(booking.createdAt),
+    });
+  }
+  // ALQ-SEED03 is already checked in, so its pre-arrival and check-in rows are
+  // overdue — `npm run messages` turns them into the outbox's demo content.
+  const { due: dueNow } = await markDueMessages();
 
   const [existingMessage] = await db
     .select()
@@ -1224,6 +1243,7 @@ async function main() {
   console.log(`  cleaner      ${cleaner.email} (magic link only)`);
   console.log(`  listings     ${stayRows.length} stays + ${carRows.length} cars`);
   console.log(`  bookings     ${bookingSeeds.length} across all statuses`);
+  console.log(`  mensajes     secuencia es-PY encolada · ${dueNow} vencido(s) en el outbox`);
   console.log(`  password     ${DEFAULT_PASSWORD} (all logins except super_admin env override)`);
 }
 

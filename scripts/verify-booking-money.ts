@@ -29,6 +29,8 @@ import {
   promoCodes,
   stayDetails,
   users,
+  messages,
+  scheduledMessages,
 } from "../src/db/schema";
 import type { CheckRunner } from "./lib/checks";
 import { assertCanAccessBooking } from "../src/lib/scope";
@@ -80,6 +82,10 @@ async function teardown(): Promise<void> {
       await db.delete(bookingExtras).where(inArray(bookingExtras.bookingId, bookingIds));
       await db.delete(deposits).where(inArray(deposits.bookingId, bookingIds));
       await db.delete(paymentLinks).where(inArray(paymentLinks.bookingId, bookingIds));
+      // Phase O-4: confirming a booking queues its message sequence, so these
+      // fixtures now produce comms rows that would otherwise be orphaned.
+      await db.delete(scheduledMessages).where(inArray(scheduledMessages.bookingId, bookingIds));
+      await db.delete(messages).where(inArray(messages.bookingId, bookingIds));
     }
     await db.delete(bookings).where(eq(bookings.listingId, listing.id));
     await db.delete(availabilityBlocks).where(eq(availabilityBlocks.listingId, listing.id));

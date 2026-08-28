@@ -1,29 +1,22 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { listPublishedListings } from "@/db/queries/listings";
-import { formatMoney } from "@/lib/money";
+import { BrowsePage } from "@/components/browse-page";
 
-export default async function BrowsePage({
+export default async function CarsBrowsePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("common");
-  const rows = await listPublishedListings("car");
-
   return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">{t("cars")}</h1>
-      <ul className="space-y-2 text-sm">
-        {rows.map((row) => (
-          <li key={row.id} className="border-b border-neutral-200 pb-2">
-            <strong>{row.title}</strong>
-            {row.locationName ? ` — ${row.locationName}` : ""} —{" "}
-            {formatMoney(row.price, row.currency)}
-          </li>
-        ))}
-      </ul>
-    </section>
+    <BrowsePage
+      vertical="car"
+      title={t("cars")}
+      detailBase="/auto"
+      searchParams={await searchParams}
+    />
   );
 }

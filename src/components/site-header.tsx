@@ -16,6 +16,7 @@ export async function SiteHeader() {
         </Link>
         <Link href="/alojamientos">{t("stays")}</Link>
         <Link href="/autos">{t("cars")}</Link>
+        <Link href="/contacto">{t("contact")}</Link>
         <span className="ml-auto flex items-center gap-3">
           {user ? (
             <>
