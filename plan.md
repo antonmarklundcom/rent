@@ -429,7 +429,7 @@ imports pruned.
 with a `pending` licence, so the document gate is demonstrable without touching
 a file — a `verified` cédula on `ALQ-SEED06`, and a `held` deposit on it.
 
-### Phase O-4 — Comms, dashboards, functional pages (O9–O12) — merged as PR #7
+### Phase O-4 — Comms, dashboards, functional pages (O9–O12) — merged as [PR #8](https://github.com/antonmarklundcom/rent/pull/8)
 
 **2026-08-28 — O-4 merged. Window 1 is complete.** The communication engine,
 the analytics/owner/onboarding/CRM layer and every functional page now exist.
