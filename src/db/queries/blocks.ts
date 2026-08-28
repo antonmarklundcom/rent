@@ -6,7 +6,7 @@
  * owner cannot block dates a guest already holds, and an imported iCal event
  * cannot silently land on top of a confirmed booking.
  */
-import { and, asc, eq, gt, isNull, lt, notInArray } from "drizzle-orm";
+import { and, asc, eq, gt, lt, notInArray } from "drizzle-orm";
 import { db } from "@/db";
 import { availabilityBlocks, icalSources, type BlockReason } from "@/db/schema";
 import { logActivity } from "@/db/queries/activity";

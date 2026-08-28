@@ -6,12 +6,11 @@
  * bookings and any future importer go through these functions — nothing else
  * inserts into `bookings`.
  */
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bookingExtras,
   bookings,
-  carDetails,
   listings,
   owners,
   stayDetails,
@@ -22,6 +21,8 @@ import {
 } from "@/db/schema";
 import { logActivity } from "@/db/queries/activity";
 import { assertAvailable, type Executor } from "@/db/queries/availability";
+import { assertGuestReady, ensureTurnoverTask } from "@/db/queries/cleaning";
+import { documentGateForBooking } from "@/db/queries/documents";
 import {
   claimPromoUse,
   releasePromoUse,
@@ -29,7 +30,7 @@ import {
   resolveExtraSelections,
   type ExtraRequest,
 } from "@/db/queries/extras";
-import type { SessionUser } from "@/lib/auth-core";
+import { AuthError, isAdmin, type SessionUser } from "@/lib/auth-core";
 import {
   assertTransition,
   occupiesCalendar,
@@ -37,6 +38,7 @@ import {
   transitionReleasesDates,
 } from "@/lib/booking-state";
 import { assertValidRange, atClock, parseYmd } from "@/lib/dates";
+import { documentGateApplies, evaluateDocumentGate } from "@/lib/documents";
 import { DomainError } from "@/lib/errors";
 import {
   computeCommission,
@@ -226,12 +228,51 @@ export type CreateBookingInput = {
   now?: Date;
   /** See `QuoteRequest.requirePublished` — set by the public actions only. */
   requirePublished?: boolean;
+  /** Admin-only, same rule as `TransitionOptions.overrideDocumentGate` (#16). */
+  overrideDocumentGate?: boolean;
 };
 
 export type CreatedBooking = {
   booking: typeof bookings.$inferSelect;
   quote: BookingQuote;
+  /** True when an admin booked a car outright over the document gate (#16). */
+  documentGateOverridden: boolean;
 };
+
+/**
+ * The #16 document gate, applied identically at creation and at confirmation.
+ *
+ * Returns `true` when an admin deliberately overrode it (the caller logs that);
+ * throws `documents_pending` when nobody did.
+ */
+async function enforceDocumentGate(
+  tx: Executor,
+  booking: { id: number | null; listingId: number; vertical: Vertical; reference: string | null },
+  targetStatus: BookingStatus,
+  actor: SessionUser | null | undefined,
+  override: boolean | undefined,
+): Promise<boolean> {
+  if (targetStatus !== "confirmed" || !documentGateApplies(booking.vertical)) return false;
+  const gate =
+    booking.id === null
+      ? evaluateDocumentGate(booking.vertical, [])
+      : await documentGateForBooking({ id: booking.id, vertical: booking.vertical }, tx);
+  if (gate.ok) return false;
+  if (!override) {
+    throw new DomainError(
+      gate.message ?? "Faltan verificar los documentos del conductor",
+      "documents_pending",
+      { bookingId: booking.id, reason: gate.reason, counts: gate.counts },
+    );
+  }
+  if (!actor || !isAdmin(actor)) {
+    throw new AuthError(
+      "Sólo un administrador puede confirmar sin la verificación de documentos",
+      "forbidden",
+    );
+  }
+  return true;
+}
 
 /**
  * Create a booking.
@@ -262,6 +303,19 @@ export async function createBooking(
         tx,
       );
     }
+
+    // #16 — the SAME gate as `transitionBooking`, because "create it already
+    // confirmed" would otherwise be a way around it. A brand-new booking has
+    // no documents yet, so the normal path for a car is: create the inquiry,
+    // attach the cédula, verify it, confirm. The override is for the operator
+    // who is holding the document at the counter, and it is logged.
+    const documentGateOverridden = await enforceDocumentGate(
+      tx,
+      { id: null, listingId: context.listing.id, vertical: context.vertical, reference: null },
+      status,
+      actor,
+      input.overrideDocumentGate,
+    );
 
     const extras = await resolveExtraSelections(
       { id: context.listing.id, vertical: context.vertical },
@@ -337,12 +391,26 @@ export async function createBooking(
           total: priced.total,
           commissionAmount: commission.commissionAmount,
           promoCodeId: priced.promoId,
+          documentGateOverridden,
         },
       },
       tx,
     );
+    if (documentGateOverridden) {
+      await logActivity(
+        {
+          entity: "booking",
+          entityId: inserted.id,
+          action: "booking.document_gate.overridden",
+          userId: actor?.id ?? null,
+          meta: { reference: inserted.reference, at: "create" },
+        },
+        tx,
+      );
+    }
 
     return {
+      documentGateOverridden,
       booking: inserted,
       quote: {
         ...priced,
@@ -390,6 +458,20 @@ export type TransitionResult = {
   booking: typeof bookings.$inferSelect;
   from: BookingStatus;
   to: BookingStatus;
+  /** Set on checkout: the turnover task the transition created or found (#1). */
+  cleaningTaskId: number | null;
+  /** True when an admin confirmed a car booking over an unverified document (#16). */
+  documentGateOverridden: boolean;
+};
+
+export type TransitionOptions = {
+  reason?: string;
+  /**
+   * Admin-only escape hatch for the document gate (#16, plan §5.O8). Confirming
+   * a car booking whose documents are still `pending` is a deliberate,
+   * logged act — never a default and never available to an owner.
+   */
+  overrideDocumentGate?: boolean;
 };
 
 /**
@@ -403,7 +485,7 @@ export async function transitionBooking(
   bookingId: number,
   to: BookingStatus,
   actor?: SessionUser | null,
-  options: { reason?: string } = {},
+  options: TransitionOptions = {},
 ): Promise<TransitionResult> {
   return db.transaction(async (tx) => {
     const [current] = await tx
@@ -417,8 +499,33 @@ export async function transitionBooking(
     }
     const from = current.status;
     assertTransition(from, to);
+    const context = await loadBookingContext(current.listingId, tx);
 
     const patch: Partial<typeof bookings.$inferInsert> = { status: to };
+    let documentGateOverridden = false;
+
+    // #16 — a car is not handed to an unverified driver (plan §5.O8).
+    documentGateOverridden = await enforceDocumentGate(
+      tx,
+      {
+        id: current.id,
+        listingId: current.listingId,
+        vertical: context.vertical,
+        reference: current.reference,
+      },
+      to,
+      actor,
+      options.overrideDocumentGate,
+    );
+
+    // #1 — a stay is not guest-ready until its turnover is done (plan §5.O6).
+    if (to === "active") {
+      await assertGuestReady(
+        { id: current.listingId, vertical: context.vertical },
+        current.startAt,
+        tx,
+      );
+    }
 
     if (transitionClaimsDates(from, to)) {
       await assertAvailable(
@@ -433,7 +540,6 @@ export async function transitionBooking(
       );
       // The commission rate is re-resolved at confirmation (plan §5.O2): an
       // inquiry can sit for weeks and the contracted rate may have moved.
-      const context = await loadBookingContext(current.listingId, tx);
       const commissionPct = resolveCommissionPct(
         context.listing.commissionPct,
         context.ownerDefaultCommissionPct,
@@ -454,6 +560,20 @@ export async function transitionBooking(
       .where(eq(bookings.id, current.id))
       .limit(1);
 
+    // #1 — checkout creates the turnover task, in THIS transaction: a booking
+    // that completed without one would leave a dirty property nobody is
+    // holding a job for (plan §3 group A).
+    let cleaningTaskId: number | null = null;
+    if (to === "completed") {
+      const { task } = await ensureTurnoverTask(
+        { id: current.id, listingId: current.listingId, endAt: current.endAt },
+        { vertical: context.vertical },
+        tx,
+        actor,
+      );
+      cleaningTaskId = task.id;
+    }
+
     await logActivity(
       {
         entity: "booking",
@@ -466,12 +586,29 @@ export async function transitionBooking(
           to,
           reason: options.reason ?? null,
           commissionAmount: patch.commissionAmount ?? current.commissionAmount,
+          cleaningTaskId,
+          documentGateOverridden,
         },
       },
       tx,
     );
 
-    return { booking: updated ?? current, from, to };
+    if (documentGateOverridden) {
+      // A separate row, not a field on the transition: this is the one an
+      // auditor greps for (plan §5.O8 — "admin override, logged").
+      await logActivity(
+        {
+          entity: "booking",
+          entityId: current.id,
+          action: "booking.document_gate.overridden",
+          userId: actor?.id ?? null,
+          meta: { reference: current.reference, reason: options.reason ?? null },
+        },
+        tx,
+      );
+    }
+
+    return { booking: updated ?? current, from, to, cleaningTaskId, documentGateOverridden };
   });
 }
 

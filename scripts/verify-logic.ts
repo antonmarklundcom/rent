@@ -1,5 +1,5 @@
 /**
- * Phase O-2 logic verification — NO database required (plan §5.O4/O5/O7).
+ * Logic verification — NO database required (plan §5.O4/O5/O7 + O6/O8).
  *
  *   npm run verify:logic
  *
@@ -9,6 +9,26 @@
  * milliseconds, so a regression here is caught before a build ever starts.
  */
 import { CheckRunner } from "./lib/checks";
+import {
+  applyChecklistUpdate,
+  assertCleaningTransition,
+  canAdvanceCleaning,
+  checklistComplete,
+  checklistProgress,
+  CLEANING_TRANSITIONS,
+  defaultChecklist,
+  nextCleaningStatus,
+  OPEN_CLEANING_STATUSES,
+} from "../src/lib/cleaning";
+import { documentGateApplies, evaluateDocumentGate } from "../src/lib/documents";
+import {
+  daysRemaining,
+  deriveReminderStatus,
+  DUE_HORIZON_DAYS,
+  DUE_HORIZON_KM,
+  isOverdue,
+} from "../src/lib/reminders";
+import { resolveUploadPath, ACCEPTED_UPLOAD_TYPES, MAX_UPLOAD_BYTES } from "../src/lib/uploads-core";
 import {
   addDays,
   atClock,
@@ -452,5 +472,144 @@ r.check(
   "el feed generado se puede volver a parsear",
   parseIcal(ics).length === 2,
 );
+
+/* ========================================================================== */
+/* Phase O-3 — operations & autos protection                                  */
+/* ========================================================================== */
+
+r.section("Limpieza — máquina de estados (#1)");
+
+r.check("needed sólo avanza a in_progress", canAdvanceCleaning("needed", "in_progress"));
+r.check("no se puede saltar needed → ready", !canAdvanceCleaning("needed", "ready"));
+r.check("in_progress avanza a ready", canAdvanceCleaning("in_progress", "ready"));
+r.check("ready es terminal", CLEANING_TRANSITIONS.ready.length === 0);
+r.check("no se vuelve atrás desde ready", !canAdvanceCleaning("ready", "in_progress"));
+r.equal("el siguiente estado de needed es in_progress", nextCleaningStatus("needed"), "in_progress");
+r.equal("ready no tiene siguiente", nextCleaningStatus("ready"), null);
+r.check(
+  "needed e in_progress son los estados que bloquean",
+  OPEN_CLEANING_STATUSES.length === 2 &&
+    OPEN_CLEANING_STATUSES.includes("needed") &&
+    OPEN_CLEANING_STATUSES.includes("in_progress"),
+);
+r.throws("avanzar al mismo estado es inválido", () => assertCleaningTransition("needed", "needed"), "invalid_transition");
+
+r.section("Limpieza — checklist");
+
+const stayList = defaultChecklist("stay");
+const carList = defaultChecklist("car");
+r.check("una estadía trae su checklist", stayList.length > 0 && stayList.every((i) => !i.done));
+r.check("un auto trae otro distinto", carList.length > 0 && carList[0]!.key !== stayList[0]!.key);
+r.check("las claves de la estadía son únicas", new Set(stayList.map((i) => i.key)).size === stayList.length);
+r.equal("progreso inicial", checklistProgress(stayList).done, 0);
+const ticked = applyChecklistUpdate(stayList, { [stayList[0]!.key]: true, inventada: true });
+r.equal("marcar un ítem lo cuenta", checklistProgress(ticked).done, 1);
+r.equal("y no agrega claves desconocidas", ticked.length, stayList.length);
+r.check("un checklist incompleto no está completo", !checklistComplete(ticked));
+r.check(
+  "con todo marcado sí",
+  checklistComplete(applyChecklistUpdate(stayList, Object.fromEntries(stayList.map((i) => [i.key, true])))),
+);
+r.check("un checklist vacío se considera completo", checklistComplete([]));
+r.check("y null también", checklistComplete(null));
+r.throws(
+  "ready exige el checklist completo",
+  () => assertCleaningTransition("in_progress", "ready", ticked),
+  "checklist_incomplete",
+);
+r.check(
+  "con el checklist completo no lanza",
+  (() => {
+    assertCleaningTransition(
+      "in_progress",
+      "ready",
+      applyChecklistUpdate(stayList, Object.fromEntries(stayList.map((i) => [i.key, true]))),
+    );
+    return true;
+  })(),
+);
+
+r.section("Verificación de documentos — el portón (#16)");
+
+r.check("aplica a autos", documentGateApplies("car"));
+r.check("no aplica a alojamientos", !documentGateApplies("stay"));
+r.check("una estadía siempre pasa", evaluateDocumentGate("stay", []).ok);
+r.check("y lo marca como no aplicable", !evaluateDocumentGate("stay", []).applies);
+r.equal("un auto sin documentos: no_documents", evaluateDocumentGate("car", []).reason, "no_documents");
+r.equal(
+  "con uno pendiente: pending",
+  evaluateDocumentGate("car", [{ status: "pending" }, { status: "verified" }]).reason,
+  "pending",
+);
+r.equal(
+  "sólo rechazados: not_verified",
+  evaluateDocumentGate("car", [{ status: "rejected" }]).reason,
+  "not_verified",
+);
+r.check(
+  "verificado y sin pendientes: abre",
+  evaluateDocumentGate("car", [{ status: "verified" }, { status: "rejected" }]).ok,
+);
+r.equal(
+  "cuenta los pendientes",
+  evaluateDocumentGate("car", [{ status: "pending" }, { status: "pending" }]).counts.pending,
+  2,
+);
+r.check("un motivo siempre trae mensaje", Boolean(evaluateDocumentGate("car", []).message));
+
+r.section("Recordatorios de flota — umbrales (#14)");
+
+const hoy = d("2026-06-01T00:00:00Z");
+const enDias = (n: number) => new Date(hoy.getTime() + n * 86_400_000).toISOString().slice(0, 10);
+r.equal(
+  "una fecha lejana queda upcoming",
+  deriveReminderStatus({ status: "upcoming", dueDate: enDias(90), dueKm: null }, { today: hoy }),
+  "upcoming",
+);
+r.equal(
+  `dentro de ${DUE_HORIZON_DAYS} días pasa a due`,
+  deriveReminderStatus({ status: "upcoming", dueDate: enDias(DUE_HORIZON_DAYS), dueKm: null }, { today: hoy }),
+  "due",
+);
+r.equal(
+  "una fecha vencida también es due",
+  deriveReminderStatus({ status: "upcoming", dueDate: enDias(-5), dueKm: null }, { today: hoy }),
+  "due",
+);
+r.equal(
+  "done nunca se revierte",
+  deriveReminderStatus({ status: "done", dueDate: enDias(-500), dueKm: null }, { today: hoy }),
+  "done",
+);
+r.equal(
+  `el kilometraje dispara a ${DUE_HORIZON_KM} km del objetivo`,
+  deriveReminderStatus({ status: "upcoming", dueDate: null, dueKm: 50_000 }, { today: hoy, odometer: 49_500 }),
+  "due",
+);
+r.equal(
+  "y no antes",
+  deriveReminderStatus({ status: "upcoming", dueDate: null, dueKm: 50_000 }, { today: hoy, odometer: 49_000 }),
+  "upcoming",
+);
+r.equal(
+  "sin lectura de odómetro no se dispara",
+  deriveReminderStatus({ status: "upcoming", dueDate: null, dueKm: 50_000 }, { today: hoy, odometer: null }),
+  "upcoming",
+);
+r.equal("días restantes", daysRemaining({ dueDate: enDias(7) }, hoy), 7);
+r.equal("sin fecha no hay días restantes", daysRemaining({ dueDate: null }, hoy), null);
+r.check("una fecha pasada está vencida", isOverdue({ status: "due", dueDate: enDias(-1), dueKm: null }, hoy));
+r.check("hoy todavía no", !isOverdue({ status: "due", dueDate: enDias(0), dueKm: null }, hoy));
+
+r.section("Subida de fotos — límites y traversal");
+
+r.check("sólo se aceptan imágenes", ACCEPTED_UPLOAD_TYPES.every((t) => t.startsWith("image/")));
+r.equal("el tope es 8 MB", MAX_UPLOAD_BYTES, 8 * 1024 * 1024);
+r.check("una ruta normal resuelve", resolveUploadPath(["cleaning", "abc.jpg"]) !== null);
+r.equal("`..` se rechaza", resolveUploadPath(["..", "etc", "passwd"]), null);
+r.equal("una barra embebida se rechaza", resolveUploadPath(["cleaning/../../etc"]), null);
+r.equal("una ruta absoluta se rechaza", resolveUploadPath(["/etc/passwd"]), null);
+r.equal("una ruta vacía se rechaza", resolveUploadPath([]), null);
+r.equal("un nombre con espacios se rechaza", resolveUploadPath(["cleaning", "a b.jpg"]), null);
 
 process.exitCode = r.summary("verificaciones de lógica pasaron") ? 1 : 0;

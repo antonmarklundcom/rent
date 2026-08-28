@@ -44,7 +44,15 @@
     "users": "Users",
     "listings": "Listings",
     "bookings": "Bookings",
-    "counts": "Database summary"
+    "counts": "Database summary",
+    "cleaning": "Cleaning & turnover",
+    "maintenance": "Maintenance & expenses",
+    "fleet": "Fleet & reminders",
+    "openTasks": "Open cleaning tasks",
+    "openTickets": "Open tickets",
+    "lowStock": "Low-stock supplies",
+    "dueReminders": "Due or overdue reminders",
+    "pendingDocuments": "Documents to verify"
   },
   "cleaner": {
     "title": "Cleaning task",
@@ -52,7 +60,18 @@
     "property": "Property",
     "dueBy": "Due",
     "statusLabel": "Status",
-    "checklist": "Checklist"
+    "checklist": "Checklist",
+    "saveChecklist": "Save checklist",
+    "photos": "Photos",
+    "photoHint": "Take a photo of the finished job",
+    "uploadPhoto": "Upload photo",
+    "caption": "Caption (optional)",
+    "start": "Start cleaning",
+    "finish": "Mark as ready",
+    "done": "Task completed. Thank you!",
+    "progress": "{done} of {total} items",
+    "noPhotos": "No photos yet.",
+    "notes": "Notes"
   },
   "listingStatus": {
     "draft": "Draft",
@@ -69,5 +88,42 @@
     "unauthenticated": "Sign in to continue",
     "notFound": "We could not find what you were looking for",
     "dbUnavailable": "The database is not configured. Check DATABASE_URL."
+  },
+  "ticketStatus": {
+    "open": "Open",
+    "in_progress": "In progress",
+    "done": "Resolved"
+  },
+  "expenseCategory": {
+    "cleaning": "Cleaning",
+    "supplies": "Supplies",
+    "repair": "Repair",
+    "fuel": "Fuel",
+    "other": "Other"
+  },
+  "reminderType": {
+    "service": "Service",
+    "insurance": "Insurance",
+    "registration": "Registration"
+  },
+  "reminderStatus": {
+    "upcoming": "Upcoming",
+    "due": "Due",
+    "done": "Done"
+  },
+  "documentType": {
+    "cedula": "ID card",
+    "passport": "Passport",
+    "license": "Licence",
+    "other": "Other"
+  },
+  "documentStatus": {
+    "pending": "Pending",
+    "verified": "Verified",
+    "rejected": "Rejected"
+  },
+  "inspectionType": {
+    "pickup": "Pickup",
+    "return": "Return"
   }
 }

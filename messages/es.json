@@ -44,7 +44,15 @@
     "users": "Usuarios",
     "listings": "Publicaciones",
     "bookings": "Reservas",
-    "counts": "Resumen de la base de datos"
+    "counts": "Resumen de la base de datos",
+    "cleaning": "Limpieza y turnover",
+    "maintenance": "Mantenimiento y gastos",
+    "fleet": "Flota y recordatorios",
+    "openTasks": "Tareas de limpieza abiertas",
+    "openTickets": "Tickets abiertos",
+    "lowStock": "Insumos con stock bajo",
+    "dueReminders": "Recordatorios vencidos o por vencer",
+    "pendingDocuments": "Documentos por verificar"
   },
   "cleaner": {
     "title": "Tarea de limpieza",
@@ -52,7 +60,18 @@
     "property": "Propiedad",
     "dueBy": "Para",
     "statusLabel": "Estado",
-    "checklist": "Checklist"
+    "checklist": "Checklist",
+    "saveChecklist": "Guardar checklist",
+    "photos": "Fotos",
+    "photoHint": "Sacá una foto del estado final",
+    "uploadPhoto": "Subir foto",
+    "caption": "Descripción (opcional)",
+    "start": "Empezar la limpieza",
+    "finish": "Marcar como lista",
+    "done": "Tarea completada. ¡Gracias!",
+    "progress": "{done} de {total} ítems",
+    "noPhotos": "Todavía no hay fotos.",
+    "notes": "Notas"
   },
   "listingStatus": {
     "draft": "Borrador",
@@ -69,5 +88,42 @@
     "unauthenticated": "Iniciá sesión para continuar",
     "notFound": "No encontramos lo que buscabas",
     "dbUnavailable": "La base de datos no está configurada. Revisá DATABASE_URL."
+  },
+  "ticketStatus": {
+    "open": "Abierto",
+    "in_progress": "En proceso",
+    "done": "Resuelto"
+  },
+  "expenseCategory": {
+    "cleaning": "Limpieza",
+    "supplies": "Insumos",
+    "repair": "Reparación",
+    "fuel": "Combustible",
+    "other": "Otros"
+  },
+  "reminderType": {
+    "service": "Service",
+    "insurance": "Seguro",
+    "registration": "Habilitación"
+  },
+  "reminderStatus": {
+    "upcoming": "Próximo",
+    "due": "Por vencer",
+    "done": "Hecho"
+  },
+  "documentType": {
+    "cedula": "Cédula",
+    "passport": "Pasaporte",
+    "license": "Licencia",
+    "other": "Otro"
+  },
+  "documentStatus": {
+    "pending": "Pendiente",
+    "verified": "Verificado",
+    "rejected": "Rechazado"
+  },
+  "inspectionType": {
+    "pickup": "Entrega",
+    "return": "Devolución"
   }
 }
