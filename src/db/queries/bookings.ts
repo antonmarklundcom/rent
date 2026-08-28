@@ -12,6 +12,7 @@ import {
   bookingExtras,
   bookings,
   listings,
+  locations,
   owners,
   stayDetails,
   type BookingSource,
@@ -23,6 +24,10 @@ import { logActivity } from "@/db/queries/activity";
 import { assertAvailable, type Executor } from "@/db/queries/availability";
 import { assertGuestReady, ensureTurnoverTask } from "@/db/queries/cleaning";
 import { documentGateForBooking } from "@/db/queries/documents";
+import {
+  cancelScheduledForBooking,
+  enqueueBookingMessages,
+} from "@/db/queries/messages";
 import {
   claimPromoUse,
   releasePromoUse,
@@ -58,6 +63,8 @@ export type BookingContext = {
   checkInTime: string;
   checkOutTime: string;
   ownerDefaultCommissionPct: string | null;
+  /** Interpolated into the message sequence's `{{location}}` (§5.O9). */
+  locationName: string | null;
 };
 
 /** Everything the price and availability engines need about one listing. */
@@ -71,10 +78,12 @@ async function loadBookingContext(
       checkInTime: stayDetails.checkInTime,
       checkOutTime: stayDetails.checkOutTime,
       ownerDefaultCommissionPct: owners.defaultCommissionPct,
+      locationName: locations.name,
     })
     .from(listings)
     .leftJoin(stayDetails, eq(stayDetails.listingId, listings.id))
     .leftJoin(owners, eq(owners.id, listings.ownerId))
+    .leftJoin(locations, eq(locations.id, listings.locationId))
     .where(eq(listings.id, listingId))
     .limit(1);
 
@@ -87,6 +96,7 @@ async function loadBookingContext(
     checkInTime: row.checkInTime ?? "14:00",
     checkOutTime: row.checkOutTime ?? "11:00",
     ownerDefaultCommissionPct: row.ownerDefaultCommissionPct,
+    locationName: row.locationName,
   };
 }
 
@@ -237,6 +247,8 @@ export type CreatedBooking = {
   quote: BookingQuote;
   /** True when an admin booked a car outright over the document gate (#16). */
   documentGateOverridden: boolean;
+  /** Sequence rows queued when the booking was created already confirmed (#4). */
+  messagesEnqueued: number;
 };
 
 /**
@@ -379,6 +391,32 @@ export async function createBooking(
       );
     }
 
+    // An admin who books a stay outright never passes through
+    // `transitionBooking`, so the sequence is queued here too — one behaviour,
+    // both entry points (#4).
+    let messagesEnqueued = 0;
+    if (status === "confirmed") {
+      const queued = await enqueueBookingMessages(
+        {
+          bookingId: inserted.id,
+          reference: inserted.reference,
+          guestName: inserted.guestName,
+          vertical: context.vertical,
+          listingTitle: context.listing.title,
+          locationName: context.locationName,
+          startAt: inserted.startAt,
+          endAt: inserted.endAt,
+          total: inserted.total,
+          currency: inserted.currency,
+          units: inserted.units,
+          confirmedAt: new Date(),
+        },
+        tx,
+        actor,
+      );
+      messagesEnqueued = queued.enqueued;
+    }
+
     await logActivity(
       {
         entity: "booking",
@@ -411,6 +449,7 @@ export async function createBooking(
 
     return {
       documentGateOverridden,
+      messagesEnqueued,
       booking: inserted,
       quote: {
         ...priced,
@@ -462,6 +501,9 @@ export type TransitionResult = {
   cleaningTaskId: number | null;
   /** True when an admin confirmed a car booking over an unverified document (#16). */
   documentGateOverridden: boolean;
+  /** Sequence rows queued on confirmation, or cancelled on cancellation (#4). */
+  messagesEnqueued: number;
+  messagesCancelled: number;
 };
 
 export type TransitionOptions = {
@@ -574,6 +616,37 @@ export async function transitionBooking(
       cleaningTaskId = task.id;
     }
 
+    // #4 — confirming a booking queues its message sequence, and cancelling it
+    // withdraws whatever has not gone out yet. Both happen in THIS transaction:
+    // a confirmation that committed without its queue would silently drop the
+    // guest's pre-arrival and review-request messages, and a cancelled stay
+    // whose queue survived would greet a guest who is not coming (plan §5.O9).
+    let messagesEnqueued = 0;
+    let messagesCancelled = 0;
+    if (to === "confirmed") {
+      const queued = await enqueueBookingMessages(
+        {
+          bookingId: current.id,
+          reference: current.reference,
+          guestName: current.guestName,
+          vertical: context.vertical,
+          listingTitle: context.listing.title,
+          locationName: context.locationName,
+          startAt: current.startAt,
+          endAt: current.endAt,
+          total: current.total,
+          currency: current.currency,
+          units: current.units,
+          confirmedAt: new Date(),
+        },
+        tx,
+        actor,
+      );
+      messagesEnqueued = queued.enqueued;
+    } else if (to === "cancelled") {
+      messagesCancelled = await cancelScheduledForBooking(current.id, tx);
+    }
+
     await logActivity(
       {
         entity: "booking",
@@ -608,7 +681,15 @@ export async function transitionBooking(
       );
     }
 
-    return { booking: updated ?? current, from, to, cleaningTaskId, documentGateOverridden };
+    return {
+      booking: updated ?? current,
+      from,
+      to,
+      cleaningTaskId,
+      documentGateOverridden,
+      messagesEnqueued,
+      messagesCancelled,
+    };
   });
 }
 

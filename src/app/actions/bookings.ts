@@ -9,7 +9,11 @@
  * these; Window 2 styles those pages without touching this file (§4.7).
  */
 import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { db } from "@/db";
+import { listings } from "@/db/schema";
+import { captureLead } from "@/db/queries/leads";
 import {
   createBooking,
   quoteForListing,
@@ -86,6 +90,29 @@ export async function requestBookingAction(
       source: "web",
       requirePublished: true,
     });
+    // A booking inquiry IS a lead (plan §5.O10). Store-first/forward-after, and
+    // a CRM problem must never undo a booking the guest already made — so this
+    // is deliberately outside the booking transaction and its failure is
+    // logged, not raised.
+    try {
+      const [listing] = await db
+        .select({ vertical: listings.vertical })
+        .from(listings)
+        .where(eq(listings.id, parsed.data.listingId))
+        .limit(1);
+      await captureLead({
+        name: parsed.data.guestName,
+        phone: parsed.data.guestPhone ?? null,
+        email: parsed.data.guestEmail ?? null,
+        message: parsed.data.notes ?? null,
+        vertical: listing?.vertical ?? null,
+        listingId: parsed.data.listingId,
+        bookingId: booking.id,
+        sourceUrl: `/reserva/${booking.reference}`,
+      });
+    } catch (error) {
+      console.error("[lead] booking inquiry not captured", error);
+    }
     revalidatePath("/admin");
     return { id: booking.id, reference: booking.reference, total: booking.total };
   });
