@@ -2,7 +2,17 @@
 
 Two-vertical rental operations platform for Paraguay: **Alojamientos** (short-term stays: casas, departamentos) and **Autos** (vehicle rental). The company operates as middleman/manager for owners — model "(b)-lite": management tool + public lead/booking-capture pages, no payment escrow or marketplace brokering in v1.
 
-**Build format:** exactly two autonomous sessions ("windows"). **Window 1 = Opus builds the entire backend/foundation. Window 2 = Sonnet builds the entire frontend/polish/deploy.** Prompts for both live in `prompts/`. Neither window does work outside this plan — anything extra goes to §10 Backlog.
+**Build format:** two model windows split into **7 phases = 7 prompts = 7 PRs**. **Opus builds phases O-1…O-4 first (entire backend/foundation), then Sonnet builds phases S-1…S-3 (entire frontend/polish/deploy).** Each phase is one fresh session, one prompt file from `prompts/`, and ends with a green build and a **merged PR** before the next phase starts — so a failed phase can never take down more than itself. No phase does work outside this plan — anything extra goes to §10 Backlog.
+
+| Phase | Model | Prompt file | Covers (plan §) |
+|---|---|---|---|
+| O-1 Foundation | Opus | `prompts/opus-1-foundation.md` | §5 O1–O3 (+ i18n scaffold) |
+| O-2 Booking & money | Opus | `prompts/opus-2-booking-money.md` | §5 O4, O5, O7 |
+| O-3 Operations & autos | Opus | `prompts/opus-3-operations.md` | §5 O6, O8 |
+| O-4 Comms, dashboards, pages | Opus | `prompts/opus-4-comms-pages.md` | §5 O9–O12 + §9 handoff |
+| S-1 Public site UI | Sonnet | `prompts/sonnet-1-public-ui.md` | §6 S1, S2, S4 |
+| S-2 Panels, SEO, i18n polish | Sonnet | `prompts/sonnet-2-admin-seo.md` | §6 S3, S5 |
+| S-3 Deploy & smoke test | Sonnet | `prompts/sonnet-3-deploy.md` | §6 S6, S7 |
 
 ---
 
@@ -10,7 +20,8 @@ Two-vertical rental operations platform for Paraguay: **Alojamientos** (short-te
 
 1. **Model (b)-lite**: management tool with public pages capturing leads/booking requests. No escrow, no reviews marketplace, no renter accounts. Growing to full marketplace later is additive.
 2. **Alojamientos is the lead vertical**; autos ships in the same build but its public side is lead-capture only (browse + WhatsApp/booking inquiry, no online car booking confirmation) until car-liability legal input lands.
-3. **One domain, subfolders**: `alquilar.com.py/alojamientos` + `/autos`. rent.com.py 301-redirects to `/autos`; one English landing page (`/en/rent-car-paraguay`) targets tourist search.
+3. **One domain, subfolders, ONE Node app**: `alquilar.com.py/alojamientos` + `/autos`. rent.com.py does NOT get its own Hostinger Node slot — it 301-redirects to `alquilar.com.py/autos`, configured at the Hostinger domain level (fallback: Next.js middleware 301 on host header). One English landing page (`/en/rent-car-paraguay`) targets tourist search.
+3b. **Language convention**: public URLs and all UI copy in Spanish (es-PY, voseo) as default; code, database identifiers, and role names in English (`bookings`, `super_admin`) — except domain terms that ARE Spanish enum values (`casa`, `departamento`). All user-visible strings go through an i18n layer (next-intl: `es` default with no URL prefix, English under `/en/...`) so languages can be swapped/added without touching logic. v1 ships es fully + en for the public site.
 4. **Stack**: Next.js 15 (App Router, TypeScript, Tailwind) + Drizzle ORM + MySQL on Hostinger managed Node.js, per `nodejs-mysql-hostinger-stack` + `nextjs-deploy-hostinger` skills. Sessions: iron-session + bcrypt (no OAuth). Leads → VenderCRM per `vendercrm-lead-capture`.
 5. **Out of v1 permanently** (Backlog): Airbnb API/paid PMS, payment escrow, public reviews, renter accounts, WhatsApp Business API auto-send (v1 = wa.me links + copy-paste + manual logging).
 
@@ -59,8 +70,9 @@ Approved extras, grouped by the chain they build on (numbers = the agreed idea l
 
 ## 4. Autonomy protocol (applies to BOTH windows — copied into both prompts)
 
-1. **Work until 100% of your window's exit criteria pass.** Do not stop early, do not ask permission for in-plan work.
-2. **Git flow**: work on your designated branch, commit in meaningful chunks, push, **create the PR yourself, subscribe to it, and merge it when CI/build is green.** Fix red CI yourself — a red build is your work, always.
+1. **Work until 100% of your phase's exit criteria pass.** Do not stop early, do not ask permission for in-plan work.
+2. **Git flow — one PR per phase**: create a fresh branch off latest `main` named `phase/<phase-id>` (e.g. `phase/o2-booking-money`), commit in meaningful chunks, push, **create the PR yourself, subscribe to it, and merge it when CI/build is green.** Fix red CI yourself — a red build is your work, always. Never start a phase's work on top of an unmerged previous phase; if the previous phase's PR is unmerged, finishing it comes first.
+2b. **Phase exit bar (every phase, in addition to its own criteria)**: `npm run build` green, seed/verify scripts still pass, nothing from earlier phases broken. Each phase leaves `main` in a state the next phase can build on blindly.
 3. **Minor, non-blocking issues** (cosmetic bugs, edge cases, nice-to-haves): do NOT stop or ask — log them in `KNOWN-ISSUES.md` with enough detail to fix later, and keep building.
 4. **Stop and ask Anton ONLY when** (a) a missing credential/external account blocks progress (DB URL, VenderCRM key, Anthropic key, Hostinger/domain access) and no documented fallback exists, or (b) a decision would create a **bad foundation** — schema shape, auth model, money/commission calculation, booking-conflict logic — where guessing wrong forces a future rewrite. Everything else: pick the reasonable option, write the choice + reasoning into `plan.md` §9 handoff notes, continue.
 5. **Missing env values never block the build**: `.env.example` documents everything; code must degrade gracefully (e.g. CRM forward marked `pending` if key absent, AI drafting returns a "configure ANTHROPIC_API_KEY" notice). Local dev uses a seeded local/remote MySQL per the deploy skill.
@@ -71,10 +83,10 @@ Approved extras, grouped by the chain they build on (numbers = the agreed idea l
 
 ## 5. Window 1 — OPUS (foundation: schema, logic, functional-but-ugly)
 
-Prompt file: `prompts/PROMPT-1-OPUS.md`. Order matters — later steps depend on earlier ones.
+Runs as four phases/PRs (see table in the header): O-1 = O1–O3, O-2 = O4+O5+O7, O-3 = O6+O8, O-4 = O9–O12. Order matters — later steps depend on earlier ones. Exception to phase order within Window 1: the FULL schema (O2) is written in phase O-1 even though most tables are used by later phases — schema is never retrofitted.
 
 ### O1. Scaffold
-`create-next-app` (App Router, TS, Tailwind); add `drizzle-orm mysql2 drizzle-kit tsx iron-session bcryptjs zod`. `drizzle.config.ts`; `src/db/index.ts` single pool `connectionLimit: 8`, `timezone: "Z"`. Commit `.env.example` documenting every var (DATABASE_URL, SESSION_SECRET, VENDERCRM_API_URL/KEY, ANTHROPIC_API_KEY, NEXT_PUBLIC_SITE_URL, GBP_REVIEW_LINK). `scripts/` for idempotent jobs (`onDuplicateKeyUpdate` on unique keys).
+`create-next-app` (App Router, TS, Tailwind); add `drizzle-orm mysql2 drizzle-kit tsx iron-session bcryptjs zod next-intl`. Set up i18n per §1.3b from day one: `es` default (no URL prefix, Spanish public route names like `/alojamientos`, `/autos`, `/panel`), `en` under `/en/...`; all user-visible strings via translation dictionaries even in the ugly functional pages (adding i18n later means touching every page — do it now). `drizzle.config.ts`; `src/db/index.ts` single pool `connectionLimit: 8`, `timezone: "Z"`. Commit `.env.example` documenting every var (DATABASE_URL, SESSION_SECRET, VENDERCRM_API_URL/KEY, ANTHROPIC_API_KEY, NEXT_PUBLIC_SITE_URL, GBP_REVIEW_LINK). `scripts/` for idempotent jobs (`onDuplicateKeyUpdate` on unique keys).
 
 ### O2. Full schema — ALL tables now, nothing retrofitted later
 §2 tables (users, owners, listings, stay_details, car_details, listing_images, locations) plus, per §3:
@@ -138,7 +150,7 @@ Unstyled but working: home, `/alojamientos` + `/autos` browse w/ filters, listin
 
 ## 6. Window 2 — SONNET (all UI, SEO, content, imagery, deploy)
 
-Prompt file: `prompts/PROMPT-2-SONNET.md`. Hard limits from §4.7 apply.
+Runs as three phases/PRs (see table in the header): S-1 = S1+S2+S4, S-2 = S3+S5, S-3 = S6+S7. Hard limits from §4.7 apply to every Sonnet phase.
 
 ### S1. Orientation
 Read §9 handoff + `KNOWN-ISSUES.md`, skim schema + `src/db/queries/`. Fix Window-1 known issues only if UI-layer; else leave logged.
@@ -152,8 +164,8 @@ Owner panel: calendar rendering, earnings cards, statements list, block-dates UX
 ### S4. Imagery
 `higgsfield-web-imagery` pipeline for all declared slots (scripted fetch/convert/place; no hand-edited filenames/alt).
 
-### S5. SEO + content
-es-PY voseo copy sitewide ("alquilá tu auto…"). Per-route metadata, OG images, sitemap incl. all location pages, robots, JSON-LD (stays: `LodgingBusiness`/`Accommodation`; cars: `Product`/`Vehicle`), canonicals on filtered views. Target keyword-research patterns: "alquileres cerca de mi", "alquiler de departamentos/casas", "alquiler de autos asunción", English "rent car paraguay/asuncion".
+### S5. SEO + content + i18n completion
+es-PY voseo copy sitewide ("alquilá tu auto…") as default locale; fill the `en` dictionary for the full public site and add a visible language switcher (per §1.3b — no logic changes, dictionaries only). Per-route metadata, OG images, hreflang pairs, sitemap incl. all location pages, robots, JSON-LD (stays: `LodgingBusiness`/`Accommodation`; cars: `Product`/`Vehicle`), canonicals on filtered views. Target keyword-research patterns: "alquileres cerca de mi", "alquiler de departamentos/casas", "alquiler de autos asunción", English "rent car paraguay/asuncion".
 
 ### S6. Deploy
 `nextjs-deploy-hostinger` §1 + §6a (Git deploy, MySQL init, Remote MySQL whitelist, tsx `.env` gotcha). Env from `.env.example`; migrations + seed on prod DB. Domains: alquilar.com.py primary; rent.com.py → 301 `/autos`. Document cron setup for `sync-ical` / `process-messages` / `generate-statements` (hourly / 15min / monthly) — if Hostinger cron can't be configured from the session, write exact instructions for Anton in `KNOWN-ISSUES.md` instead of stopping.
