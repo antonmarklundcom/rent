@@ -337,5 +337,88 @@ literal unions — additive, no migration.
 `ical_sources` row, and commission snapshots on the seeded bookings so demo data
 matches what the engine produces.
 
+### Phase O-3 — Operations & autos protection (O6, O8) — merged as PR #6
+
+**2026-08-28 — O-3 merged.** Ground operations and autos protection now exist,
+as logic plus functional screens; **no schema shape changed** (only ten type
+aliases exported from `src/db/schema.ts`, additive, no migration —
+`drizzle-kit generate` reports "nothing to migrate"). Next phase (O-4) starts at
+`src/db/queries/cleaning.ts` + `src/db/queries/documents.ts` (the two gates the
+booking engine now calls) and at `src/app/[locale]/admin/reservas/[id]/page.tsx`
+— O-4's general booking admin should EXTEND that route, not open a second one
+for the same entity.
+
+**What now exists**: query layer
+`src/db/queries/{cleaning,maintenance,expenses,supplies,photos,inspections,reminders,documents,tx}.ts` ·
+pure libs `src/lib/{cleaning,documents,reminders,uploads-core}.ts` ·
+photo storage `src/lib/uploads.ts` + route `/api/uploads/[...path]` ·
+actions `src/app/actions/{operations,autos,cleaner}.ts` ·
+screens `/tarea/[token]` (rebuilt: checklist, camera upload, status advance),
+`/admin/limpieza`, `/admin/mantenimiento`, `/admin/flota`,
+`/admin/reservas/[id]` · tests `scripts/verify-operations.ts` (82 checks, called
+by `verify-core`) plus 50 new database-free checks in `verify-logic.ts`.
+`npm run verify` runs 162 + 211.
+
+**The four chained flows (§3 groups A and C), all proven end to end**:
+checkout auto-creates the turnover task inside the booking's own transaction ·
+a stay cannot go `confirmed → active` while that task is open · a ticket cost
+creates exactly one linked expense · damage on a return inspection opens a
+ticket **and** deducts the deposit atomically · a car booking cannot be
+confirmed on unverified documents, an admin can override with a reason, an
+owner cannot, and the override lands in `activity_log`.
+
+**Decisions/deviations made under §4.4** (none needed Anton):
+
+1. **Photo upload is local disk behind a route handler**, `UPLOAD_DIR` (default
+   `.uploads/`) served by `/api/uploads/[...path]`. This phase needs uploads
+   (§5.O6 puts them on the cleaner page), so it chose the mechanism O-1 had
+   deferred to O-4 — **O-4 does not need to decide it again**. Not `public/`:
+   that is a build input, so runtime writes there do not survive a Git deploy.
+   Object storage is a swap of `storeUpload` + the route; no caller sees a path.
+   `resolveUploadPath` is the traversal guard and is unit-tested.
+2. **The guest-ready gate has no override.** `confirmed → active` on a stay is
+   refused while a turnover task is open; the only way through is to mark the
+   task ready. An override would let somebody assert "this flat is clean"
+   without recording that they did — the resolution *is* the honest record, and
+   it is one tap for the cleaner, one click for an admin.
+3. **The document gate is enforced at creation as well as at confirmation.**
+   Creating a car booking straight into `confirmed` would otherwise walk around
+   it. One helper (`enforceDocumentGate`) serves both paths. The normal flow for
+   a car is therefore: create the inquiry → attach the cédula → verify → confirm.
+4. **The gate needs ≥1 `verified` document AND zero `pending` ones.** Rejected
+   documents alone fail as `not_verified`; the three reasons are distinct
+   because they are three different instructions to the operator. Stays are not
+   gated at all (plan §1.2 keeps that funnel frictionless).
+5. **Checkout creates a turnover task for BOTH verticals.** §5.O6 says
+   "booking completed ⇒ auto-create cleaning task" without qualification, and a
+   returned car does need cleaning. Only the *readiness gate* is stay-specific;
+   a car's condition is an inspection (#5), which is a different record.
+6. **Marking a task `ready` requires every checklist item ticked**, and the
+   flow never goes backwards. A flat found dirty gets a NEW task, so "who said
+   this was clean, and when" always has one answer.
+7. **Supplies are consumed in the same transaction as the `ready` transition**,
+   clamped at zero rather than refusing to close the task. A cleaner who used
+   the last towel should see a restock alert, not a task that will not finish.
+8. **A ticket cost writes its expense in the ticket's transaction**, keyed by
+   `expenses_ticket_uq`; correcting the cost updates that row. An expense
+   already stamped with a `statement_id` is **never** rewritten — that money was
+   reported to an owner, so a correction is a new expense a human decides on.
+   `updateTicket` returns `expenseLocked` and the UI says so.
+9. **Damage → ticket → expense → deduction is one transaction.** Every
+   money-adjacent query function (`deposits.ts` included, refactored) now takes
+   an OPTIONAL executor via `src/db/queries/tx.ts`, so a nested call joins the
+   caller's transaction instead of deadlocking against it on a second pooled
+   connection. A rejected deduction leaves no inspection and no ticket behind —
+   `verify-operations` asserts exactly that.
+10. **Fleet reminder statuses are a cache** of the pure rules in
+    `src/lib/reminders.ts` (30 days / 500 km), refreshed by the admin reads.
+    Odometer readings come from the latest inspection that carries one.
+11. **O-3 actions are admin-only.** Owners get scoped views in O-4's owner panel
+    (§5.O10); every read query here already accepts a `listingIds` filter.
+
+**Seed additions**: booking `ALQ-SEED08` — a car rental left as an `inquiry`
+with a `pending` licence, so the document gate is demonstrable without touching
+a file — a `verified` cédula on `ALQ-SEED06`, and a `held` deposit on it.
+
 ## 10. Backlog (append; never build unplanned)
 - Car legal / full autos booking flow · WhatsApp Business API auto-send · payment gateway integration (v1 is link+manual status) · Airbnb PMS/channel manager · escrow/reviews/renter accounts (model (a)) · map search UI · defensive domains · GBP content loop (`gbp-optimizer`) after launch

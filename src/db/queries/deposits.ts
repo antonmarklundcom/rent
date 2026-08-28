@@ -6,12 +6,17 @@
  * correction, not an update, and the engine refuses it. A deduction may point
  * at the inspection (#5) or maintenance ticket (#6) that justifies it, which
  * is what phase O-3 wires up.
+ *
+ * Every mutation takes an OPTIONAL executor (see `src/db/queries/tx.ts`): a
+ * return inspection that finds damage opens a ticket AND deducts the deposit,
+ * and those two writes must land together or not at all.
  */
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { bookings, deposits, listings, type DepositStatus } from "@/db/schema";
 import { logActivity } from "@/db/queries/activity";
 import type { Executor } from "@/db/queries/availability";
+import { inTransaction } from "@/db/queries/tx";
 import type { SessionUser } from "@/lib/auth-core";
 import { DomainError } from "@/lib/errors";
 import { toMoney, toNumber } from "@/lib/money";
@@ -25,12 +30,13 @@ export type CreateDepositInput = {
 export async function createDeposit(
   input: CreateDepositInput,
   actor?: SessionUser | null,
+  executor?: Executor,
 ): Promise<typeof deposits.$inferSelect> {
   const amount = toMoney(input.amount);
   if (toNumber(amount) <= 0) {
     throw new DomainError("El depósito tiene que ser mayor a cero", "invalid_amount");
   }
-  return db.transaction(async (tx) => {
+  return inTransaction(executor, async (tx) => {
     const [booking] = await tx
       .select()
       .from(bookings)
@@ -108,8 +114,9 @@ async function loadHeldDeposit(tx: Executor, depositId: number) {
 export async function returnDeposit(
   depositId: number,
   actor?: SessionUser | null,
+  executor?: Executor,
 ): Promise<typeof deposits.$inferSelect> {
-  return db.transaction(async (tx) => {
+  return inTransaction(executor, async (tx) => {
     const deposit = await loadHeldDeposit(tx, depositId);
     await tx
       .update(deposits)
@@ -151,6 +158,7 @@ export type DeductDepositInput = {
 export async function deductDeposit(
   input: DeductDepositInput,
   actor?: SessionUser | null,
+  executor?: Executor,
 ): Promise<typeof deposits.$inferSelect> {
   const deduction = toMoney(input.deductionAmount);
   const reason = input.reason.trim();
@@ -160,7 +168,7 @@ export async function deductDeposit(
   if (!reason) {
     throw new DomainError("Toda deducción necesita un motivo", "invalid_amount");
   }
-  return db.transaction(async (tx) => {
+  return inTransaction(executor, async (tx) => {
     const deposit = await loadHeldDeposit(tx, input.depositId);
     if (toNumber(deduction) > toNumber(deposit.amount)) {
       throw new DomainError(

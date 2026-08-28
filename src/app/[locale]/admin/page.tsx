@@ -1,15 +1,13 @@
 import { getTranslations } from "next-intl/server";
-import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/session";
-import { adminCounts } from "@/db/queries/stats";
+import { Link } from "@/i18n/navigation";
+import { adminCounts, operationsCounts } from "@/db/queries/stats";
+import { requireAdminPage } from "@/lib/page-guards";
 
 export default async function AdminPage() {
-  const user = await getSessionUser();
-  if (!user) redirect("/ingresar");
-  if (user.role !== "admin" && user.role !== "super_admin") redirect("/");
+  const user = await requireAdminPage();
 
   const t = await getTranslations("admin");
-  const counts = await adminCounts();
+  const [counts, ops] = await Promise.all([adminCounts(), operationsCounts()]);
 
   return (
     <section className="space-y-4">
@@ -27,6 +25,29 @@ export default async function AdminPage() {
           {t("bookings")}: {counts.bookings}
         </li>
         <li>limpieza: {counts.cleaningTasks}</li>
+      </ul>
+
+      <h2 className="font-medium">Operaciones</h2>
+      <ul className="list-disc pl-5 text-sm">
+        <li>
+          <Link href="/admin/limpieza" className="text-blue-700 underline">
+            {t("cleaning")}
+          </Link>{" "}
+          — {t("openTasks")}: {ops.openTasks} · {t("lowStock")}: {ops.lowStock}
+        </li>
+        <li>
+          <Link href="/admin/mantenimiento" className="text-blue-700 underline">
+            {t("maintenance")}
+          </Link>{" "}
+          — {t("openTickets")}: {ops.openTickets}
+        </li>
+        <li>
+          <Link href="/admin/flota" className="text-blue-700 underline">
+            {t("fleet")}
+          </Link>{" "}
+          — {t("dueReminders")}: {ops.dueReminders} · {t("pendingDocuments")}:{" "}
+          {ops.pendingDocuments}
+        </li>
       </ul>
     </section>
   );

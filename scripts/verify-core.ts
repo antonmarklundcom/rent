@@ -7,7 +7,8 @@
  * (owner A cannot read or touch owner B), and the cleaner magic link resolves.
  *
  * O-2 appends the booking, iCal and money checks from
- * `scripts/verify-booking-money.ts` — they build and tear down their own
+ * `scripts/verify-booking-money.ts`, and O-3 the operations and autos checks
+ * from `scripts/verify-operations.ts` — each builds and tears down its own
  * fixtures, so this script stays re-runnable.
  *
  * The database-free calculators are pinned separately in
@@ -39,6 +40,7 @@ import { listListingsForUser } from "../src/db/queries/listings";
 import { addMoney, percentOf, toMoney } from "../src/lib/money";
 import { CheckRunner } from "./lib/checks";
 import { runBookingMoneyChecks } from "./verify-booking-money";
+import { runOperationsChecks } from "./verify-operations";
 
 let failures = 0;
 let checks = 0;
@@ -279,6 +281,8 @@ async function main() {
   // Phase O-2: booking/availability engine, iCal sync, money engine.
   const runner = new CheckRunner();
   await runBookingMoneyChecks(runner);
+  // Phase O-3: cleaning, maintenance, expenses, supplies, autos protection.
+  await runOperationsChecks(runner);
   checks += runner.total;
   failures += runner.failed;
 

@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { cleaningTasks, listings } from "@/db/schema";
+import { cleaningTasks, listings, taskPhotos } from "@/db/schema";
 import { randomToken } from "@/lib/tokens";
 
 /**
@@ -27,6 +27,25 @@ export async function resolveMagicToken(token: string) {
     .where(eq(cleaningTasks.magicToken, token))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Everything the cleaner's page renders, in one round trip.
+ *
+ * Note what is NOT selected: no guest name, no phone, no prices, no other
+ * listing. A magic token buys exactly one task's worth of access (plan §2).
+ */
+export async function resolveMagicTaskView(token: string) {
+  const row = await resolveMagicToken(token);
+  if (!row) return null;
+  const photos = await db
+    .select({ id: taskPhotos.id, url: taskPhotos.url, caption: taskPhotos.caption })
+    .from(taskPhotos)
+    .where(
+      and(eq(taskPhotos.subjectType, "cleaning_task"), eq(taskPhotos.subjectId, row.task.id)),
+    )
+    .orderBy(asc(taskPhotos.id));
+  return { ...row, photos };
 }
 
 export function magicLinkUrl(token: string): string {

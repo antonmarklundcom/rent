@@ -19,6 +19,14 @@ export type DomainErrorCode =
   | "promo_exhausted"
   | "promo_wrong_vertical"
   | "extra_invalid"
+  /* operations */
+  | "checklist_incomplete"
+  | "not_guest_ready"
+  | "invalid_file"
+  | "upload_failed"
+  /* autos protection */
+  | "documents_pending"
+  | "inspection_exists"
   /* money */
   | "invalid_amount"
   | "already_settled"

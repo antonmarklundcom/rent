@@ -8,11 +8,12 @@
  *   npm run seed
  */
 import "dotenv/config";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { closePool, db } from "../src/db";
 import {
   availabilityBlocks,
+  bookingDocuments,
   bookingExtras,
   bookings,
   carDetails,
@@ -724,6 +725,19 @@ async function main() {
       units: 3,
       unitPrice: onix.price,
     },
+    {
+      // Stays an `inquiry` on purpose: it is the demo of the #16 document gate
+      // — a car booking that CANNOT be confirmed until its cédula is verified.
+      reference: "ALQ-SEED08",
+      listing: corolla,
+      guestName: "Marcos Benítez",
+      guestPhone: "+595984000008",
+      status: "inquiry" as const,
+      start: day(12, 9),
+      end: day(15, 9),
+      units: 3,
+      unitPrice: corolla.price,
+    },
   ];
 
   const bookingRows: Record<string, typeof bookings.$inferSelect> = {};
@@ -1011,6 +1025,58 @@ async function main() {
     ].filter((r) => !have.has(r.type));
     if (wanted.length) await db.insert(vehicleReminders).values(wanted);
   }
+
+  /* ------------------------------------------ autos: renter documents (#16) */
+  // One verified document on the confirmed rental, one still pending on the
+  // inquiry — so the admin queue and the document gate both have something to
+  // show without anyone having to upload a file first.
+  for (const seed of [
+    {
+      bookingRef: "ALQ-SEED06",
+      type: "cedula" as const,
+      status: "verified" as const,
+      reviewedBy: admin.id,
+      reviewedAt: day(-2, 10),
+    },
+    {
+      bookingRef: "ALQ-SEED08",
+      type: "license" as const,
+      status: "pending" as const,
+      reviewedBy: null,
+      reviewedAt: null,
+    },
+  ]) {
+    const bookingId = bookingRows[seed.bookingRef]!.id;
+    const existing = await db
+      .select({ id: bookingDocuments.id })
+      .from(bookingDocuments)
+      .where(
+        and(eq(bookingDocuments.bookingId, bookingId), eq(bookingDocuments.type, seed.type)),
+      );
+    if (existing.length === 0) {
+      await db.insert(bookingDocuments).values({
+        bookingId,
+        type: seed.type,
+        // Placeholder like listing_images: no bytes exist until someone uploads
+        // one through /admin/reservas/<id> (see KNOWN-ISSUES.md).
+        fileUrl: `/api/uploads/document/seed-${seed.bookingRef.toLowerCase()}.jpg`,
+        status: seed.status,
+        reviewedBy: seed.reviewedBy,
+        reviewedAt: seed.reviewedAt,
+      });
+    }
+  }
+
+  // A deposit still held on the confirmed rental — the counterpart to the
+  // deducted one on ALQ-SEED07.
+  await db
+    .insert(deposits)
+    .values({
+      bookingId: bookingRows["ALQ-SEED06"]!.id,
+      amount: "800000.00",
+      status: "held",
+    })
+    .onDuplicateKeyUpdate({ set: { amount: "800000.00" } });
 
   /* ------------------------------------------------------------ money links */
   await db

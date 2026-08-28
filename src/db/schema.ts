@@ -98,6 +98,14 @@ export type DepositStatus = (typeof DEPOSIT_STATUSES)[number];
 export type DiscountType = (typeof DISCOUNT_TYPES)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export type ExtraScope = (typeof EXTRA_SCOPES)[number];
+export type CleaningStatus = (typeof CLEANING_STATUSES)[number];
+export type TicketStatus = (typeof TICKET_STATUSES)[number];
+export type PhotoSubject = (typeof PHOTO_SUBJECTS)[number];
+export type InspectionType = (typeof INSPECTION_TYPES)[number];
+export type ReminderType = (typeof REMINDER_TYPES)[number];
+export type ReminderStatus = (typeof REMINDER_STATUSES)[number];
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
 /* -------------------------------------------------------------------------- */
 /* People                                                                      */

@@ -150,3 +150,6 @@ next-env.d.ts
 # Env
 .env
 .env.local
+
+# uploaded photos (src/lib/uploads.ts)
+/.uploads

@@ -34,7 +34,7 @@ imports `dotenv/config` on its first line.
 | `npm run seed` | Idempotent seed (plan §5.O12) |
 | `npm run verify` | Everything below — logic checks, then the database checks |
 | `npm run verify:logic` | `scripts/verify-logic.ts` — pure calculators, **no database needed** |
-| `npm run verify:core` | `scripts/verify-core.ts` — auth, roles, scoping, booking, iCal, money |
+| `npm run verify:core` | `scripts/verify-core.ts` — auth, roles, scoping, booking, iCal, money, operations |
 | `npm run sync:ical` | Import every active iCal source (#2) — idempotent, cron-ready |
 | `npm run statements` | Generate monthly owner statements (#3) — idempotent, cron-ready |
 
@@ -49,12 +49,27 @@ Both accept arguments: `npm run sync:ical -- 12` syncs only source 12;
 `npm run statements -- 2026-07 3` regenerates July 2026 for owner 3. Re-running
 either is always safe.
 
-## Public endpoints added in phase O-2
+## Public endpoints
 
 | Route | What it serves |
 |---|---|
 | `/api/ical/<token>.ics` | Per-listing availability feed for Airbnb/Booking/Google. The token is the credential; the feed carries no guest data. |
 | `/api/estados/<id>.html` | Owner statement as HTML. Admins see all; an owner sees only their own. |
+| `/api/uploads/<folder>/<file>` | Photos attached to cleaning tasks, tickets, inspections and renter documents. The random filename is the credential (see `KNOWN-ISSUES.md`). |
+
+## Operations screens (phase O-3)
+
+| Route | Who | What |
+|---|---|---|
+| `/tarea/<token>` | cleaner, no login | Checklist, photo upload, `needed → in_progress → ready` |
+| `/admin/limpieza` | admin | Day roster, assignment, jobs per cleaner, low stock |
+| `/admin/mantenimiento` | admin | Tickets (a cost creates its expense) and expenses |
+| `/admin/flota` | admin | Vehicle reminders due soon, damage log, document queue |
+| `/admin/reservas/<id>` | admin | Renter documents + gate, handover inspections, deposit |
+
+Photo uploads are written to `UPLOAD_DIR` (default `.uploads/`, git-ignored) and
+served back through `/api/uploads/...`. Point it outside the Git working tree in
+production, or a deploy will wipe it.
 
 ## Seed logins
 
@@ -72,6 +87,10 @@ Password for every seeded account: `Alquilar2026!`
 Cleaner task pages live at `/tarea/<magic_token>`; the seed creates the tokens
 `seedtoken-limpieza-0001` (ready) and `seedtoken-limpieza-0002` (needed).
 
+Booking `ALQ-SEED08` is a car rental left as an `inquiry` with an unverified
+licence — open `/admin/reservas/<its id>` to see the #16 document gate refuse a
+confirmation, and the logged admin override that gets past it.
+
 ## Layout
 
 ```
@@ -86,6 +105,10 @@ src/lib/dates.ts       half-open [start, end) ranges — THE overlap predicate
 src/lib/pricing.ts     price, extras, promos, commission — pure, no database
 src/lib/booking-state.ts  booking state machine + which states hold the calendar
 src/lib/ical.ts        iCal parsing and generation — pure, no network
+src/lib/cleaning.ts    turnover checklist + cleaning status machine — pure
+src/lib/documents.ts   the renter-document gate — pure
+src/lib/reminders.ts   fleet reminder thresholds — pure
+src/lib/uploads.ts     photo storage (server) over uploads-core.ts (pure)
 messages/              es + en dictionaries
 scripts/               idempotent jobs (migrate, seed, verify)
 ```
