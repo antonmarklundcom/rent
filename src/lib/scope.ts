@@ -1,4 +1,4 @@
-import { and, eq, inArray, type SQL } from "drizzle-orm";
+import { and, eq, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { bookings, listings } from "@/db/schema";
 import { AuthError, isAdmin } from "@/lib/auth-core";
@@ -25,16 +25,6 @@ export async function ownedListingIds(user: SessionUser): Promise<number[]> {
     .from(listings)
     .where(listingScope(user));
   return rows.map((r) => r.id);
-}
-
-/** Scope any table that carries a `listing_id` column. */
-export function listingIdScope(
-  user: SessionUser,
-  column: Parameters<typeof inArray>[0],
-  ids: number[],
-): SQL | undefined {
-  if (isAdmin(user)) return undefined;
-  return inArray(column, ids.length ? ids : [-1]);
 }
 
 export async function assertCanAccessListing(

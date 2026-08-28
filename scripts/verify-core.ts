@@ -13,6 +13,8 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import type { RowDataPacket } from "mysql2";
 import { closePool, db, getPool } from "../src/db";
 import {
+  BOOKING_STATUSES,
+  bookings,
   cleaningTasks,
   listings,
   owners,
@@ -139,15 +141,13 @@ async function main() {
   check("≥6 cars seeded", Number(carCount) >= 6, `got ${carCount}`);
 
   const bookingStatuses = await db
-    .select({ status: sql<string>`status` })
-    .from(sql`bookings`)
-    .groupBy(sql`status`);
+    .select({ status: bookings.status })
+    .from(bookings)
+    .groupBy(bookings.status);
   const statuses = new Set(bookingStatuses.map((r) => r.status));
   check(
     "bookings exist in all five states",
-    ["inquiry", "confirmed", "active", "completed", "cancelled"].every((s) =>
-      statuses.has(s),
-    ),
+    BOOKING_STATUSES.every((s) => statuses.has(s)),
     [...statuses].join(","),
   );
 
