@@ -534,7 +534,30 @@ work in it rather than an empty page.
 the `scheduled_messages` and `messages` rows their bookings create, or every
 `npm run verify` left orphan queue rows behind · `listInboxThreads` aliased its
 `COUNT(*)` away from `total`, which MySQL called ambiguous against the joined
-`bookings.total` (caught by a browser smoke test, not by the unit checks).
+`bookings.total` (caught by a browser smoke test, not by the unit checks) ·
+`enqueueBookingMessages` was counting inserts from the driver's `affectedRows`,
+which MySQL and MariaDB report differently for a no-change
+`ON DUPLICATE KEY UPDATE`, so "how many did we queue" could read 0 on a real
+insert; it now reads the booking's existing keys and inserts the gap.
+
+**Found and fixed in the §4.8c pre-handoff audit**:
+
+- **An IDOR in the info base.** `deleteInfoItemAction` authorised the caller
+  against the `listingId` in the form and then deleted whatever `infoItemId`
+  came with it — an owner could pass their own listing and somebody else's
+  item. `deleteInfoItem` now takes the listing id and refuses a mismatch;
+  `verify-comms` proves it with two owners.
+- **A public payload could attribute a lead to any listing**, including a
+  draft. `storeLead` now keeps `listing_id` only when it names a `published`
+  listing, and `POST /api/leads` no longer accepts `bookingId` at all — a lead
+  is attached to a booking only by the server code that created that booking.
+- **The per-booking message list read the global outbox and filtered in JS**,
+  so a booking's own messages could fall outside the first 50 rows.
+  `listOutbox` takes a `bookingId` filter now.
+- Five dead exports pruned, two of them actively unsafe to leave lying around
+  for Window 2: `getListingBySlug` returned a listing of ANY status (the public
+  invariant is `published` only) and `listPublishedListings` was superseded by
+  `browseListings`.
 
 ---
 

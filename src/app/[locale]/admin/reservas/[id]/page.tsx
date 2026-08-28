@@ -59,10 +59,10 @@ export default async function AdminBookingOpsPage({
       listInspectionsForBooking(bookingId),
       getDepositForBooking(bookingId),
       listPaymentLinksForBooking(bookingId),
-      listOutbox({ statuses: ["scheduled", "due", "sent", "cancelled"], limit: 50 }),
+      listOutbox({ statuses: ["scheduled", "due", "sent", "cancelled"], bookingId }),
       listThreadMessages({ bookingId }),
     ]);
-  const bookingMessages = queued.filter((message) => message.bookingId === bookingId);
+
   const recorded = new Set(inspections.map((i) => i.inspection.type));
   const missing = INSPECTION_TYPES.filter((type) => !recorded.has(type));
 
@@ -402,13 +402,13 @@ export default async function AdminBookingOpsPage({
 
       <section className="space-y-2">
         <h2 className="font-medium">Mensajes (#4)</h2>
-        {bookingMessages.length === 0 ? (
+        {queued.length === 0 ? (
           <p className="text-sm text-neutral-600">
             Esta reserva todavía no tiene mensajes agendados. Se agendan al confirmarla.
           </p>
         ) : (
           <ul className="text-sm">
-            {bookingMessages.map((message) => (
+            {queued.map((message) => (
               <li key={message.id} className="border-b py-1">
                 {message.sendAfter.toISOString().slice(0, 16).replace("T", " ")} ·{" "}
                 {message.label ?? message.templateKey} · {message.status}

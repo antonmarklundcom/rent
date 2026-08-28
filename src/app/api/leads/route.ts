@@ -27,7 +27,6 @@ const schema = z.object({
   message: z.string().trim().max(4000).optional(),
   vertical: z.enum(VERTICALS).optional(),
   listingId: z.coerce.number().int().positive().optional(),
-  bookingId: z.coerce.number().int().positive().optional(),
   sourceUrl: z.string().trim().max(500).optional(),
   /** Honeypot (skill rule 4): bots fill it, humans never see it. */
   website: z.string().optional(),
@@ -73,7 +72,9 @@ export async function POST(request: Request) {
       message: parsed.data.message ?? null,
       vertical: parsed.data.vertical ?? null,
       listingId: parsed.data.listingId ?? null,
-      bookingId: parsed.data.bookingId ?? null,
+      // Deliberately NOT accepted from the request: a lead is attached to a
+      // booking only by the server code that created that booking.
+      bookingId: null,
       sourceUrl: parsed.data.sourceUrl ?? headerList.get("referer") ?? null,
       attribution,
     });

@@ -241,7 +241,7 @@ export async function deleteInfoItemAction(
   return toFormState(async () => {
     const listingId = id.parse(formData.get("listingId"));
     await assertCanAccessListing(user, listingId);
-    await deleteInfoItem(id.parse(formData.get("infoItemId")), user);
+    await deleteInfoItem(id.parse(formData.get("infoItemId")), listingId, user);
     revalidatePath(`/panel/publicaciones/${listingId}`);
     return "Ítem eliminado";
   });

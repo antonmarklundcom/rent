@@ -8,7 +8,7 @@
  */
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { leads, type LeadForwardStatus, type Vertical } from "@/db/schema";
+import { leads, listings, type LeadForwardStatus, type Vertical } from "@/db/schema";
 import { logActivity } from "@/db/queries/activity";
 import type { Executor } from "@/db/queries/availability";
 import { DomainError } from "@/lib/errors";
@@ -32,6 +32,25 @@ export type CreateLeadInput = {
   fields?: Record<string, unknown>;
 };
 
+/**
+ * A `listing_id` on a public lead is caller-supplied, so it is only kept when
+ * it names a listing that is actually published. Otherwise a scripted post
+ * could attribute enquiries to any listing — or to a draft nobody can see —
+ * and quietly poison the per-listing lead counts.
+ */
+async function resolveListingId(
+  listingId: number | null | undefined,
+  executor: Executor,
+): Promise<number | null> {
+  if (!listingId) return null;
+  const [row] = await executor
+    .select({ id: listings.id })
+    .from(listings)
+    .where(and(eq(listings.id, listingId), eq(listings.status, "published")))
+    .limit(1);
+  return row?.id ?? null;
+}
+
 /** Store the lead. Always succeeds if the input is sane — forwarding is separate. */
 export async function storeLead(
   input: CreateLeadInput,
@@ -52,7 +71,9 @@ export async function storeLead(
       email,
       message: input.message?.trim() || null,
       vertical: input.vertical ?? null,
-      listingId: input.listingId ?? null,
+      listingId: await resolveListingId(input.listingId, executor),
+      // A booking id is only ever set by our own server code (the booking
+      // request action), never taken from a public payload — see /api/leads.
       bookingId: input.bookingId ?? null,
       sourceUrl: input.sourceUrl?.slice(0, 500) ?? null,
       forwardStatus: "pending",
@@ -204,14 +225,4 @@ export async function leadCounts(executor: Executor = db) {
   const counts: Record<LeadForwardStatus, number> = { pending: 0, forwarded: 0, failed: 0 };
   for (const row of rows) counts[row.status] = Number(row.count);
   return counts;
-}
-
-/** Leads captured for one listing — shown on the admin listing screen. */
-export async function listLeadsForListing(listingId: number, executor: Executor = db) {
-  return executor
-    .select()
-    .from(leads)
-    .where(and(eq(leads.listingId, listingId)))
-    .orderBy(desc(leads.createdAt))
-    .limit(50);
 }

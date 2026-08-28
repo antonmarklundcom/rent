@@ -58,8 +58,6 @@ function affectedRows(result: unknown): number {
 /* Templates                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export type MessageTemplate = typeof messageTemplates.$inferSelect;
-
 export async function listTemplates(
   options: { locale?: string; activeOnly?: boolean } = {},
   executor: Executor = db,
@@ -395,6 +393,8 @@ export async function listOutbox(
   options: {
     statuses?: ScheduledMessageStatus[];
     listingIds?: number[];
+    /** One booking's own sequence — used by the per-booking admin screen. */
+    bookingId?: number;
     limit?: number;
   } = {},
   executor: Executor = db,
@@ -419,6 +419,7 @@ export async function listOutbox(
     .where(
       and(
         inArray(scheduledMessages.status, statuses),
+        options.bookingId ? eq(scheduledMessages.bookingId, options.bookingId) : undefined,
         options.listingIds ? inArray(bookings.listingId, options.listingIds) : undefined,
       ),
     )
@@ -807,13 +808,25 @@ export async function upsertInfoItem(
   );
 }
 
+/**
+ * Delete one info item.
+ *
+ * `listingId` is REQUIRED and checked against the row. The caller authorises
+ * access to a listing, not to an item id — without this check an owner could
+ * pass their own `listingId` past the gate and somebody else's `infoItemId`
+ * into the delete.
+ */
 export async function deleteInfoItem(
   id: number,
+  listingId: number,
   actor?: SessionUser | null,
   executor: Executor = db,
 ): Promise<void> {
   const [row] = await executor.select().from(infoItems).where(eq(infoItems.id, id)).limit(1);
   if (!row) throw new DomainError("El ítem no existe", "not_found", { id });
+  if (row.listingId !== listingId) {
+    throw new DomainError("Ese ítem no pertenece a esta publicación", "not_found", { id });
+  }
   await executor.delete(infoItems).where(eq(infoItems.id, id));
   await logActivity(
     {

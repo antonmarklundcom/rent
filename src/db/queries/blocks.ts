@@ -98,24 +98,6 @@ export async function getBlockById(blockId: number, executor: Executor = db) {
   return row ?? null;
 }
 
-export async function listBlocksForListing(
-  listingId: number,
-  window?: DateRange,
-  executor: Executor = db,
-) {
-  return executor
-    .select()
-    .from(availabilityBlocks)
-    .where(
-      and(
-        eq(availabilityBlocks.listingId, listingId),
-        window ? lt(availabilityBlocks.startAt, window.endAt) : undefined,
-        window ? gt(availabilityBlocks.endAt, window.startAt) : undefined,
-      ),
-    )
-    .orderBy(asc(availabilityBlocks.startAt));
-}
-
 /* -------------------------------------------------------------------------- */
 /* iCal-imported blocks (#2)                                                   */
 /* -------------------------------------------------------------------------- */

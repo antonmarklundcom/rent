@@ -57,6 +57,7 @@ import {
   listOutbox,
   listThreadMessages,
   loadDraftSubject,
+  deleteInfoItem,
   logMessage,
   markDueMessages,
   markScheduledSent,
@@ -477,6 +478,26 @@ export async function runCommsChecks(r: CheckRunner): Promise<void> {
     { listingId: fx.stayId, question: "¿Hay cochera?", answer: "Sí, para dos autos." },
     fx.ownerUser,
   );
+  await upsertInfoItem(
+    { listingId: fx.otherListingId, question: "¿Ajena?", answer: "De otro propietario." },
+    fx.otherOwnerUser,
+  );
+  const [foreignItem] = await db
+    .select()
+    .from(infoItems)
+    .where(eq(infoItems.listingId, fx.otherListingId));
+  await r.throwsAsync(
+    "no se puede borrar un ítem de otra publicación pasando la propia",
+    () => deleteInfoItem(foreignItem!.id, fx.stayId, fx.ownerUser),
+    "not_found",
+  );
+  r.equal(
+    "y el ítem ajeno sigue ahí",
+    (await db.select().from(infoItems).where(eq(infoItems.id, foreignItem!.id))).length,
+    1,
+  );
+  await deleteInfoItem(foreignItem!.id, fx.otherListingId, fx.otherOwnerUser);
+
   const infoRows = await db.select().from(infoItems).where(eq(infoItems.listingId, fx.stayId));
   r.equal("guardar la misma pregunta actualiza en lugar de duplicar", infoRows.length, 1);
   r.equal("con la respuesta nueva", infoRows[0]!.answer, "Sí, para dos autos.");
@@ -629,6 +650,27 @@ export async function runCommsChecks(r: CheckRunner): Promise<void> {
   const storedLead = (await listLeads({ limit: 100 })).find((row) => row.name === LEAD_NAME);
   r.check("y aparece en la lista del admin", !!storedLead);
   r.equal("atado a su publicación", storedLead?.listingId, fx.stayId);
+
+  const bogus = await captureLead({
+    name: LEAD_NAME,
+    phone: "0981 555 001",
+    listingId: fx.draftId,
+  });
+  r.equal(
+    "un lead que apunta a una publicación no publicada pierde esa atribución",
+    bogus.lead.listingId,
+    null,
+  );
+  const unknownListing = await captureLead({
+    name: LEAD_NAME,
+    phone: "0981 555 002",
+    listingId: 99_999_999,
+  });
+  r.equal(
+    "y una publicación inexistente tampoco se guarda",
+    unknownListing.lead.listingId,
+    null,
+  );
 
   await r.throwsAsync(
     "un lead sin teléfono ni correo se rechaza",
