@@ -20,6 +20,8 @@
     "skipToContent": "Skip to content"
   },
   "home": {
+    "metaTitle": "Houses, Apartments & Car Rental in Paraguay",
+    "metaDescription": "Find vacation rentals and car rental near you in Asunción and across Paraguay. No hidden fees — everything is coordinated on WhatsApp.",
     "title": "Rent your next place or car in Paraguay",
     "intro": "Houses, apartments and vehicles managed by alquilar.com.py. Ask on WhatsApp and we coordinate everything with you.",
     "browseStays": "Browse stays",
@@ -245,6 +247,10 @@
     }
   },
   "browse": {
+    "stayMetaTitle": "Apartments & Houses for Rent in Paraguay",
+    "stayMetaDescription": "Browse houses, apartments and rooms for rent in Asunción and other Paraguayan cities. Filter by location, price and capacity.",
+    "carMetaTitle": "Rent a Car in Asunción, Paraguay",
+    "carMetaDescription": "Browse cars for rent in Asunción and other Paraguayan cities. Request a booking and we'll confirm pickup on WhatsApp.",
     "stayEyebrow": "Stays in Paraguay",
     "stayTitle": "Stays",
     "carEyebrow": "Car rental in Paraguay",

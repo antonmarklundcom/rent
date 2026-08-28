@@ -1,4 +1,6 @@
 import { ActionForm } from "@/components/action-form";
+import { Badge, onboardingStepTone } from "@/components/ui/badge";
+import { EmptyState, PageHeader, Section, TableWrap, table, td } from "@/components/ui/page-header";
 import { setOnboardingStepAction } from "@/app/actions/panel";
 import { listOnboardingPipeline } from "@/db/queries/onboarding";
 import { requireAdminPage } from "@/lib/page-guards";
@@ -15,57 +17,65 @@ export default async function AdminOwnersPage() {
   const pipeline = await listOnboardingPipeline();
 
   return (
-    <section className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Propietarios y onboarding</h1>
-        <p className="text-sm text-neutral-600">
-          Los pasos marcados “auto” se completan solos cuando el dato existe (fotos, base de
-          información, iCal, primera publicación publicada).
-        </p>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Propietarios y onboarding"
+        subtitle="Los pasos marcados “auto” se completan solos cuando el dato existe (fotos, base de información, iCal, primera publicación publicada)."
+      />
 
-      {pipeline.length === 0 && (
-        <p className="text-sm text-neutral-600">Todavía no hay propietarios cargados.</p>
+      {pipeline.length === 0 ? (
+        <EmptyState>Todavía no hay propietarios cargados.</EmptyState>
+      ) : (
+        <div className="space-y-4">
+          {pipeline.map((owner) => (
+            <Section
+              key={owner.ownerId}
+              title={owner.ownerName}
+              actions={
+                <Badge tone={owner.completedAt ? "good" : "neutral"}>
+                  {owner.doneCount}/{owner.totalCount}{owner.completedAt ? " · completo" : ""}
+                </Badge>
+              }
+            >
+              <TableWrap>
+                <table className={table}>
+                  <tbody>
+                    {owner.steps.map((step) => (
+                      <tr key={step.id}>
+                        <td className={`${td} font-medium`}>
+                          {step.label}{" "}
+                          {step.derived && <span className="text-xs font-normal text-ink/45">(auto)</span>}
+                        </td>
+                        <td className={td}>
+                          <Badge tone={onboardingStepTone(step.status)}>{step.status}</Badge>
+                        </td>
+                        <td className={td}>
+                          {!step.derived && (
+                            <ActionForm
+                              action={setOnboardingStepAction}
+                              submitLabel={step.status === "done" ? "Desmarcar" : "Marcar hecho"}
+                              className="inline"
+                              submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-ink/40 disabled:opacity-50"
+                            >
+                              <input type="hidden" name="ownerId" value={owner.ownerId} />
+                              <input type="hidden" name="stepKey" value={step.stepKey} />
+                              <input
+                                type="hidden"
+                                name="status"
+                                value={step.status === "done" ? "pending" : "done"}
+                              />
+                            </ActionForm>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrap>
+            </Section>
+          ))}
+        </div>
       )}
-
-      {pipeline.map((owner) => (
-        <article key={owner.ownerId} className="space-y-2 border border-neutral-300 p-3">
-          <h2 className="font-medium">
-            {owner.ownerName} — {owner.doneCount}/{owner.totalCount}
-            {owner.completedAt ? " ✔ completo" : ""}
-          </h2>
-          <table className="w-full text-left text-sm">
-            <tbody>
-              {owner.steps.map((step) => (
-                <tr key={step.id} className="border-b">
-                  <td className="py-1">
-                    {step.label} {step.derived && <span className="text-xs text-neutral-500">(auto)</span>}
-                  </td>
-                  <td>{step.status}</td>
-                  <td>
-                    {!step.derived && (
-                      <ActionForm
-                        action={setOnboardingStepAction}
-                        submitLabel={step.status === "done" ? "Desmarcar" : "Marcar hecho"}
-                        className="inline"
-                        submitClassName="rounded border px-2 py-0.5 text-xs disabled:opacity-50"
-                      >
-                        <input type="hidden" name="ownerId" value={owner.ownerId} />
-                        <input type="hidden" name="stepKey" value={step.stepKey} />
-                        <input
-                          type="hidden"
-                          name="status"
-                          value={step.status === "done" ? "pending" : "done"}
-                        />
-                      </ActionForm>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </article>
-      ))}
-    </section>
+    </div>
   );
 }

@@ -20,6 +20,8 @@
     "skipToContent": "Saltar al contenido"
   },
   "home": {
+    "metaTitle": "Alquiler de casas, departamentos y autos en Paraguay",
+    "metaDescription": "Encontrá alojamientos y autos en alquiler cerca tuyo en Asunción y otras ciudades de Paraguay. Sin comisiones ocultas: coordinamos todo por WhatsApp.",
     "title": "Alquilá tu próximo alojamiento o auto en Paraguay",
     "intro": "Casas, departamentos y vehículos administrados por alquilar.com.py. Consultás por WhatsApp y coordinamos todo con vos.",
     "browseStays": "Ver alojamientos",
@@ -245,6 +247,10 @@
     }
   },
   "browse": {
+    "stayMetaTitle": "Alquiler de casas y departamentos en Paraguay",
+    "stayMetaDescription": "Casas, departamentos y habitaciones en alquiler en Asunción y otras ciudades de Paraguay. Filtrá por ubicación, precio y capacidad.",
+    "carMetaTitle": "Alquiler de autos en Asunción y Paraguay",
+    "carMetaDescription": "Autos en alquiler en Asunción y otras ciudades de Paraguay. Pedí tu reserva y coordinamos la entrega por WhatsApp.",
     "stayEyebrow": "Alojamientos en Paraguay",
     "stayTitle": "Alojamientos",
     "carEyebrow": "Autos en alquiler en Paraguay",

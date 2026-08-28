@@ -162,6 +162,28 @@ blocks a later phase.
   still point at `/images/placeholder-*.jpg`, which do not exist, so rendering
   them as `<img>` would show broken images. Phase S-4 fills the slots.
 
+## From phase S-2 (panels, admin, cleaner UI, SEO, i18n)
+
+- **`text-base` is a color token in this codebase, not a font-size utility —
+  easy to reintroduce by accident.** `src/app/globals.css` defines
+  `--color-base` (the near-white background color, used deliberately as
+  `bg-ink text-base` for white text on dark buttons, an S-1 convention). Any
+  bare `text-base` written with font-size intent silently resolves to that
+  color instead. It made the O-3 cleaner page's task title, checklist labels
+  and caption input invisible against the light background until this phase
+  fixed the three call sites in `tarea/[token]/page.tsx`. There is no lint
+  rule catching this — it only shows up visually, never in typecheck/build.
+- **The cleaner task page has no offline/service-worker layer.** Plan
+  §6.S3's "offline-tolerant basics" is satisfied only in the sense that plain
+  `<form action={...}>` server actions progressively enhance without JS; a
+  cleaner who loses signal mid-upload gets no queued retry. Worth adding if
+  cleaners report dropped submissions in the field.
+- **`sitemap.ts` entries carry no `lastModified`.** `browseListings` /
+  `BrowseResult` don't expose `updatedAt`, and fetching it per-listing via
+  `getPublicListing` in a sitemap loop would be an N+1 query the phase's hard
+  limit on `src/db/queries/` blocks adding. Add an `updatedAt` column to the
+  browse projection if freshness signals ever matter for ranking.
+
 ## From phase S-1 (public site UI)
 
 - **S-4 imagery could not be fetched — every photo slot is still empty.**

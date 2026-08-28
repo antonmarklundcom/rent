@@ -1,14 +1,32 @@
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { ListingCard } from "@/components/listing-card";
 import { SafeImage } from "@/components/safe-image";
 import { ButtonLink } from "@/components/ui/button";
 import { browseListings, browseLocations } from "@/db/queries/listings";
+import { bilingualAlternates } from "@/lib/seo";
 
 /**
  * Home (plan §5.O11 → §6.S2): dual-vertical hero, featured listings for each
  * vertical, a trust ribbon, location links and a statement CTA for owners.
  */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "home" });
+  return {
+    title: { absolute: t("metaTitle") },
+    description: t("metaDescription"),
+    alternates: bilingualAlternates(locale, "/"),
+    openGraph: { title: t("metaTitle"), description: t("metaDescription"), type: "website" },
+    twitter: { card: "summary_large_image", title: t("metaTitle"), description: t("metaDescription") },
+  };
+}
+
 export default async function HomePage({
   params,
 }: {

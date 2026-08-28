@@ -1,5 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { ActionForm } from "@/components/action-form";
+import { Badge, messageStatusTone } from "@/components/ui/badge";
+import { PageHeader, Section, TableWrap, EmptyState, table, th, td } from "@/components/ui/page-header";
+import { WhatsAppCta } from "@/components/whatsapp-cta";
 import {
   cancelMessageAction,
   markSentAction,
@@ -32,118 +35,108 @@ export default async function AdminOutboxPage() {
   const now = Date.now();
 
   return (
-    <section className="space-y-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Mensajes por enviar</h1>
-        <p className="text-sm text-neutral-600">
-          Los mensajes se agendan solos cuando una reserva se confirma. Nada se envía
-          automáticamente: abrís WhatsApp, mandás y marcás como enviado.
-        </p>
-        <ProcessDueButton action={processDueAction} />
-      </header>
+    <div className="space-y-8">
+      <PageHeader
+        title="Mensajes por enviar"
+        subtitle="Los mensajes se agendan solos cuando una reserva se confirma. Nada se envía automáticamente: abrís WhatsApp, mandás y marcás como enviado."
+        actions={<ProcessDueButton action={processDueAction} />}
+      />
 
-      <section className="space-y-3">
-        <h2 className="font-medium">Para enviar ahora ({due.length})</h2>
+      <Section title={`Para enviar ahora (${due.length})`}>
         {due.length === 0 ? (
-          <p className="text-sm text-neutral-600">Nada pendiente. 🎉</p>
+          <EmptyState>Nada pendiente. 🎉</EmptyState>
         ) : (
-          due.map((row) => (
-            <article key={row.id} className="space-y-2 border border-neutral-300 p-3 text-sm">
-              <p className="font-medium">
-                {row.label ?? row.templateKey} · {row.guestName} ·{" "}
-                <Link
-                  href={`/admin/reservas/${row.bookingId}`}
-                  className="text-blue-700 underline"
-                >
-                  {row.reference}
-                </Link>{" "}
-                · {row.listingTitle}
-              </p>
-              <p className="text-xs text-neutral-500">
-                Programado para {when(row.sendAfter)}
-                {row.sendAfter.getTime() < now - 86_400_000 ? " (atrasado)" : ""}
-              </p>
-              <pre className="whitespace-pre-wrap border bg-neutral-50 p-2">{row.body}</pre>
-              <div className="flex flex-wrap items-center gap-3">
-                {row.whatsappUrl ? (
-                  <a
-                    href={row.whatsappUrl}
-                    target="_blank"
-                    rel="noopener"
-                    className="rounded bg-green-700 px-3 py-1 text-white"
+          <div className="space-y-3">
+            {due.map((row) => (
+              <article key={row.id} className="space-y-3 rounded-md border border-ink/10 p-4 text-sm">
+                <p>
+                  <span className="font-medium">{row.label ?? row.templateKey}</span> · {row.guestName} ·{" "}
+                  <Link href={`/admin/reservas/${row.bookingId}`} className="text-accent hover:underline">
+                    {row.reference}
+                  </Link>{" "}
+                  · {row.listingTitle}
+                </p>
+                <p className="text-xs text-ink/50">
+                  Programado para {when(row.sendAfter)}
+                  {row.sendAfter.getTime() < now - 86_400_000 && (
+                    <Badge tone="critical" className="ml-2">atrasado</Badge>
+                  )}
+                </p>
+                <pre className="whitespace-pre-wrap rounded-md bg-ink/[0.03] p-3 font-sans text-sm">{row.body}</pre>
+                <div className="flex flex-wrap items-center gap-3">
+                  {row.whatsappUrl ? (
+                    <WhatsAppCta href={row.whatsappUrl} label="Abrir WhatsApp" evLoc="admin_outbox" className="min-h-10 px-4 text-sm" />
+                  ) : (
+                    <span className="text-xs text-red-600">
+                      Sin teléfono válido — copiá el texto y mandalo a mano
+                    </span>
+                  )}
+                  <ActionForm
+                    action={markSentAction}
+                    submitLabel="Marcar enviado"
+                    className="inline"
+                    submitClassName="rounded-sm bg-ink px-3 py-1.5 text-sm text-base disabled:opacity-50"
                   >
-                    Abrir WhatsApp
-                  </a>
-                ) : (
-                  <span className="text-xs text-red-600">
-                    Sin teléfono válido — copiá el texto y mandalo a mano
-                  </span>
-                )}
-                <ActionForm
-                  action={markSentAction}
-                  submitLabel="Marcar enviado"
-                  className="inline"
-                  submitClassName="rounded bg-neutral-900 px-3 py-1 text-white disabled:opacity-50"
-                >
-                  <input type="hidden" name="scheduledId" value={row.id} />
-                </ActionForm>
-                <ActionForm
-                  action={cancelMessageAction}
-                  submitLabel="Cancelar"
-                  className="inline"
-                  submitClassName="rounded border px-3 py-1 disabled:opacity-50"
-                >
-                  <input type="hidden" name="scheduledId" value={row.id} />
-                </ActionForm>
-              </div>
-            </article>
-          ))
+                    <input type="hidden" name="scheduledId" value={row.id} />
+                  </ActionForm>
+                  <ActionForm
+                    action={cancelMessageAction}
+                    submitLabel="Cancelar"
+                    className="inline"
+                    submitClassName="rounded-sm border border-ink/20 px-3 py-1.5 text-sm hover:border-red-300 hover:text-red-700 disabled:opacity-50"
+                  >
+                    <input type="hidden" name="scheduledId" value={row.id} />
+                  </ActionForm>
+                </div>
+              </article>
+            ))}
+          </div>
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Agendados ({scheduled.length})</h2>
+      <Section title={`Agendados (${scheduled.length})`}>
         {scheduled.length === 0 ? (
-          <p className="text-sm text-neutral-600">Sin mensajes agendados.</p>
+          <EmptyState>Sin mensajes agendados.</EmptyState>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="py-1">Cuándo</th>
-                <th>Plantilla</th>
-                <th>Reserva</th>
-                <th>Huésped</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scheduled.map((row) => (
-                <tr key={row.id} className="border-b">
-                  <td className="py-1">{when(row.sendAfter)}</td>
-                  <td>{row.label ?? row.templateKey}</td>
-                  <td>{row.reference}</td>
-                  <td>{row.guestName}</td>
+          <TableWrap>
+            <table className={table}>
+              <thead>
+                <tr>
+                  <th className={th}>Cuándo</th>
+                  <th className={th}>Plantilla</th>
+                  <th className={th}>Reserva</th>
+                  <th className={th}>Huésped</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {scheduled.map((row) => (
+                  <tr key={row.id}>
+                    <td className={td}>{when(row.sendAfter)}</td>
+                    <td className={td}>{row.label ?? row.templateKey}</td>
+                    <td className={td}>{row.reference}</td>
+                    <td className={td}>{row.guestName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Últimos enviados</h2>
+      <Section title="Últimos enviados">
         {sent.length === 0 ? (
-          <p className="text-sm text-neutral-600">Todavía no se envió ninguno.</p>
+          <EmptyState>Todavía no se envió ninguno.</EmptyState>
         ) : (
-          <ul className="list-disc pl-5 text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {sent.map((row) => (
-              <li key={row.id}>
+              <li key={row.id} className="py-2">
                 {row.sentAt ? when(row.sentAt) : "—"} · {row.label ?? row.templateKey} ·{" "}
                 {row.reference} · {row.guestName}
               </li>
             ))}
           </ul>
         )}
-      </section>
-    </section>
+      </Section>
+    </div>
   );
 }

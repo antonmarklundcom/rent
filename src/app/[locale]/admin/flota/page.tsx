@@ -6,6 +6,9 @@ import {
   updateReminderAction,
 } from "@/app/actions/autos";
 import { ActionForm } from "@/components/action-form";
+import { Badge, reminderStatusTone } from "@/components/ui/badge";
+import { fieldClass, labelClass } from "@/components/ui/field";
+import { EmptyState, PageHeader, Section, TableWrap, table, th, td } from "@/components/ui/page-header";
 import { listDamagedInspections } from "@/db/queries/inspections";
 import { listListingsForUser } from "@/db/queries/listings";
 import { listDueReminders } from "@/db/queries/reminders";
@@ -33,82 +36,80 @@ export default async function AdminFleetPage() {
   const cars = listings.filter((l) => l.vertical === "car");
 
   return (
-    <section className="space-y-8">
-      <h1 className="text-2xl font-semibold">{t("fleet")}</h1>
+    <div className="space-y-8">
+      <PageHeader title={t("fleet")} />
 
-      <section className="space-y-2">
-        <h2 className="font-medium">{t("dueReminders")} (#14)</h2>
+      <Section title={`${t("dueReminders")} (#14)`}>
         {due.length === 0 ? (
-          <p className="text-sm text-neutral-500">No hay recordatorios cargados.</p>
+          <EmptyState>No hay recordatorios cargados.</EmptyState>
         ) : (
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="py-1">Vehículo</th>
-                <th>Tipo</th>
-                <th>Vence</th>
-                <th>Km</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {due.map(({ reminder, listingTitle, daysLeft, overdue, odometer }) => (
-                <tr key={reminder.id} className={`border-b align-top ${overdue ? "bg-red-50" : ""}`}>
-                  <td className="py-2">{listingTitle}</td>
-                  <td>
-                    {tType(reminder.type)}
-                    {reminder.label && (
-                      <span className="block text-xs text-neutral-500">{reminder.label}</span>
-                    )}
-                  </td>
-                  <td>
-                    {reminder.dueDate ?? "—"}
-                    {daysLeft !== null && (
-                      <span className="block text-xs text-neutral-500">
-                        {overdue ? `vencido hace ${-daysLeft} días` : `en ${daysLeft} días`}
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    {reminder.dueKm ?? "—"}
-                    {odometer !== null && (
-                      <span className="block text-xs text-neutral-500">actual: {odometer}</span>
-                    )}
-                  </td>
-                  <td>{tStatus(reminder.status)}</td>
-                  <td className="space-y-1">
-                    <ActionForm
-                      action={updateReminderAction}
-                      submitLabel="Marcar hecho"
-                      className="space-y-1"
-                      submitClassName="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
-                    >
-                      <input type="hidden" name="reminderId" value={reminder.id} />
-                      <input type="hidden" name="status" value="done" />
-                    </ActionForm>
-                    <ActionForm
-                      action={deleteReminderAction}
-                      submitLabel="Eliminar"
-                      className="space-y-1"
-                      submitClassName="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
-                    >
-                      <input type="hidden" name="reminderId" value={reminder.id} />
-                    </ActionForm>
-                  </td>
+          <TableWrap>
+            <table className={table}>
+              <thead>
+                <tr>
+                  <th className={th}>Vehículo</th>
+                  <th className={th}>Tipo</th>
+                  <th className={th}>Vence</th>
+                  <th className={th}>Km</th>
+                  <th className={th}>Estado</th>
+                  <th className={th}>Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {due.map(({ reminder, listingTitle, daysLeft, overdue, odometer }) => (
+                  <tr key={reminder.id} className={overdue ? "bg-red-50/60" : ""}>
+                    <td className={`${td} font-medium`}>{listingTitle}</td>
+                    <td className={td}>
+                      {tType(reminder.type)}
+                      {reminder.label && <span className="block text-xs text-ink/50">{reminder.label}</span>}
+                    </td>
+                    <td className={td}>
+                      {reminder.dueDate ?? "—"}
+                      {daysLeft !== null && (
+                        <span className="block text-xs text-ink/50">
+                          {overdue ? `vencido hace ${-daysLeft} días` : `en ${daysLeft} días`}
+                        </span>
+                      )}
+                    </td>
+                    <td className={td}>
+                      {reminder.dueKm ?? "—"}
+                      {odometer !== null && <span className="block text-xs text-ink/50">actual: {odometer}</span>}
+                    </td>
+                    <td className={td}>
+                      <Badge tone={reminderStatusTone(reminder.status)}>{tStatus(reminder.status)}</Badge>
+                    </td>
+                    <td className={`${td} space-y-1`}>
+                      <ActionForm
+                        action={updateReminderAction}
+                        submitLabel="Marcar hecho"
+                        className="space-y-1"
+                        submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-50"
+                      >
+                        <input type="hidden" name="reminderId" value={reminder.id} />
+                        <input type="hidden" name="status" value="done" />
+                      </ActionForm>
+                      <ActionForm
+                        action={deleteReminderAction}
+                        submitLabel="Eliminar"
+                        className="space-y-1"
+                        submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-red-300 hover:text-red-700 disabled:opacity-50"
+                      >
+                        <input type="hidden" name="reminderId" value={reminder.id} />
+                      </ActionForm>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Nuevo recordatorio</h2>
+      <Section title="Nuevo recordatorio">
         <ActionForm action={createReminderAction} submitLabel="Crear recordatorio">
-          <label className="block space-y-1 text-sm">
-            <span>Vehículo</span>
-            <select name="listingId" required className="w-full rounded border border-neutral-300 px-2 py-1">
+          <label className={labelClass}>
+            <span className="text-ink/70">Vehículo</span>
+            <select name="listingId" required className={fieldClass}>
               {cars.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.title}
@@ -116,10 +117,10 @@ export default async function AdminFleetPage() {
               ))}
             </select>
           </label>
-          <div className="grid grid-cols-3 gap-2 text-sm">
-            <label className="space-y-1">
-              <span>Tipo</span>
-              <select name="type" className="w-full rounded border border-neutral-300 px-2 py-1">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className={labelClass}>
+              <span className="text-ink/70">Tipo</span>
+              <select name="type" className={fieldClass}>
                 {REMINDER_TYPES.map((type) => (
                   <option key={type} value={type}>
                     {tType(type)}
@@ -127,34 +128,30 @@ export default async function AdminFleetPage() {
                 ))}
               </select>
             </label>
-            <label className="space-y-1">
-              <span>Vence</span>
-              <input type="date" name="dueDate" className="w-full rounded border border-neutral-300 px-2 py-1" />
+            <label className={labelClass}>
+              <span className="text-ink/70">Vence</span>
+              <input type="date" name="dueDate" className={fieldClass} />
             </label>
-            <label className="space-y-1">
-              <span>o Km</span>
-              <input type="number" name="dueKm" min={0} className="w-full rounded border border-neutral-300 px-2 py-1" />
+            <label className={labelClass}>
+              <span className="text-ink/70">o Km</span>
+              <input type="number" name="dueKm" min={0} className={fieldClass} />
             </label>
           </div>
-          <label className="block space-y-1 text-sm">
-            <span>Etiqueta</span>
-            <input name="label" className="w-full rounded border border-neutral-300 px-2 py-1" />
+          <label className={labelClass}>
+            <span className="text-ink/70">Etiqueta</span>
+            <input name="label" className={fieldClass} />
           </label>
         </ActionForm>
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">{t("pendingDocuments")} (#16)</h2>
+      <Section title={`${t("pendingDocuments")} (#16)`}>
         {pendingDocs.length === 0 ? (
-          <p className="text-sm text-neutral-500">No hay documentos pendientes.</p>
+          <EmptyState>No hay documentos pendientes.</EmptyState>
         ) : (
-          <ul className="space-y-1 text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {pendingDocs.map((row) => (
-              <li key={row.document.id}>
-                <Link
-                  href={`/admin/reservas/${row.document.bookingId}`}
-                  className="text-blue-700 underline"
-                >
+              <li key={row.document.id} className="py-2">
+                <Link href={`/admin/reservas/${row.document.bookingId}`} className="font-medium text-accent hover:underline">
                   {row.bookingReference}
                 </Link>{" "}
                 — {row.listingTitle} · {tDocType(row.document.type)} · {row.guestName}
@@ -162,20 +159,16 @@ export default async function AdminFleetPage() {
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Inspecciones con daño (#5)</h2>
+      <Section title="Inspecciones con daño (#5)">
         {damaged.length === 0 ? (
-          <p className="text-sm text-neutral-500">Sin daños registrados.</p>
+          <EmptyState>Sin daños registrados.</EmptyState>
         ) : (
-          <ul className="space-y-1 text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {damaged.map((row) => (
-              <li key={row.inspection.id}>
-                <Link
-                  href={`/admin/reservas/${row.inspection.bookingId}`}
-                  className="text-blue-700 underline"
-                >
+              <li key={row.inspection.id} className="py-2">
+                <Link href={`/admin/reservas/${row.inspection.bookingId}`} className="font-medium text-accent hover:underline">
                   {row.bookingReference}
                 </Link>{" "}
                 — {row.listingTitle} · {row.inspection.notes ?? "sin notas"}
@@ -183,7 +176,7 @@ export default async function AdminFleetPage() {
             ))}
           </ul>
         )}
-      </section>
-    </section>
+      </Section>
+    </div>
   );
 }

@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { BrowseFilters } from "@/components/browse-filters";
+import { JsonLd } from "@/components/json-ld";
 import { ListingCard } from "@/components/listing-card";
 import { WhatsAppCta } from "@/components/whatsapp-cta";
 import { browseListings, browseLocations, getPublicLocation } from "@/db/queries/listings";
+import { absoluteLocaleUrl, buildBreadcrumbJsonLd, buildItemListJsonLd } from "@/lib/seo";
 import { normalisePhone } from "@/lib/messaging";
 import type { Vertical } from "@/db/schema";
 
@@ -61,6 +63,7 @@ export async function LocationLanding({
 
   const t = await getTranslations("locationPage");
   const tc = await getTranslations("common");
+  const locale = await getLocale();
   const vertLabel = vertical === "stay" ? tc("stays") : tc("cars");
 
   const siblings = allLocations.filter((l) => l.parentId === location.id);
@@ -71,8 +74,27 @@ export async function LocationLanding({
       )}`
     : null;
 
+  const breadcrumbItems = [
+    { name: vertLabel, url: absoluteLocaleUrl(locale, basePath) },
+    ...(location.parent
+      ? [{ name: location.parent.name, url: absoluteLocaleUrl(locale, `${basePath}/${location.parent.slug}`) }]
+      : []),
+    {
+      name: location.name,
+      url: absoluteLocaleUrl(locale, location.parent ? `${basePath}/${location.parent.slug}/${slug}` : `${basePath}/${slug}`),
+    },
+  ];
+
   return (
     <section className="section pt-10">
+      <JsonLd data={buildBreadcrumbJsonLd(breadcrumbItems)} />
+      {rows.length > 0 && (
+        <JsonLd
+          data={buildItemListJsonLd(
+            rows.map((row) => ({ name: row.title, url: absoluteLocaleUrl(locale, `/publicacion/${row.slug}`) })),
+          )}
+        />
+      )}
       <div className="wrap space-y-6">
         <nav className="flex flex-wrap items-center gap-1 text-sm text-ink/50">
           <Link href={basePath} className="hover:text-accent">

@@ -660,6 +660,98 @@ their `IntersectionObserver` fires, which a non-scrolling screenshot never
 triggers; once scrolled, cards, typed facts, filters and the booking form all
 render as designed.
 
+### Phase S-2 — Panels, admin, cleaner UI, SEO, i18n completion (S3, S5)
+
+**2026-08-28 — S-2 merged.** Every internal-tool screen (owner panel, admin,
+cleaner magic-link page) is now styled on the same WARM CRAFT tokens S-1
+introduced, and the public site has full SEO coverage. Built as two
+independent, file-disjoint passes run concurrently (admin/panel/cleaner vs.
+SEO/i18n) in the same checkout, then merged, audited and verified together
+in this session. Next phase (S-3) starts at `nextjs-deploy-hostinger` §1+§6a
+— no code work is queued for it beyond the plan's own deploy checklist.
+
+**What now exists**: shared chrome `src/app/[locale]/{admin,panel,tarea/[token]}/layout.tsx`
+(each wraps a `ToastProvider`; `admin/layout.tsx` additionally holds the
+sidebar nav with live operational badge counts) · new components
+`src/components/toast.tsx`, `src/components/ui/{admin-nav,badge,field,page-header,stat-tile,charts,panel-calendar}.tsx` ·
+`action-form.tsx` rewritten to push feedback into the toast from inside the
+action wrapper itself (see fix below) · `src/lib/statement-html.ts` restyled
+into a real, self-contained, print-safe financial document · SEO: `src/lib/seo.ts`
+(pure: canonical/hreflang builders, JSON-LD builders), `src/components/json-ld.tsx`,
+`src/components/og-image.tsx` + eleven `opengraph-image.tsx` routes,
+`src/app/sitemap.ts` (all published listings + every live location page,
+both locales), `src/app/robots.ts`, `generateMetadata` completed on every
+public route that lacked it (home, both browse pages, both verticals' city +
+barrio location pages), JSON-LD on listing detail (`House`/`Apartment`/`Room`/`Accommodation`
+for stays, `Car` for autos) and on location pages (Breadcrumb + ItemList).
+`messages/{en,es}.json` gained additive `metaTitle`/`metaDescription` keys
+only — both dictionaries already had full key parity for the public site
+before this phase (verified programmatically), so the O-4-era "en dictionary
+is a stub" issue turned out to already be resolved by S-1.
+
+**Decisions/deviations made under §4.4** (none needed Anton):
+
+1. **The real bug behind "success message disappears on unmount" (logged by
+   both O-3 and O-4) was not a missing `useEffect`.** A server-action form
+   submission is one combined React transition that both updates the form's
+   local state and refreshes the page's server data; when that refresh makes
+   an ancestor stop rendering the form, React never commits it with its
+   post-submit state, so nothing keyed on that state ever fires. Fixed by
+   pushing the toast from inside `ActionForm`'s action wrapper — a state
+   update on `ToastProvider`, a component the row's disappearance never
+   touches — before `useActionState` sees the result at all. Verified live
+   against `/admin/reservas/[id]`'s document-verify flow, not just read.
+2. **Admin page auth stays exactly where O-3/O-4 put it**: `requireAdminPage()`
+   (`src/lib/page-guards.ts`, pre-existing, not touched) now runs once in
+   `admin/layout.tsx` instead of once per page — Next.js layouts execute for
+   every child regardless, so this changes nothing about the security
+   boundary, which per that file's own long-standing doc comment was never
+   page rendering anyway: every mutation still calls `requireRole` in its own
+   server action. `panel/` and `tarea/[token]/` layouts add no auth — those
+   pages keep their own per-page session checks unchanged, since a shared
+   layout there would have had to duplicate owner-scoping logic that differs
+   per page.
+3. **`sitemap.ts`/`robots.ts` live outside `[locale]`** (Next.js metadata-route
+   convention) and `sitemap.ts` is explicitly `force-dynamic` with every DB
+   call wrapped in try/catch, degrading to static entries on failure — it
+   does not inherit the locale layout's dynamic setting, and plan §4.5
+   requires `next build` to succeed with no `DATABASE_URL` at all.
+4. **`robots.ts` allows `/api/ical/` inside an otherwise-blanket `/api/`
+   disallow** (calendar clients fetch it directly by token) and disallows
+   `/ingresar` alongside admin/panel/tarea, beyond what §6.S5's own wording
+   named — a login page has nothing worth ranking.
+5. **The sitemap's location-page list is reconstructed from `getPublicLocation`
+   per barrio row rather than from `browseLocations` alone**, because
+   `browseLocations` only returns a location with a *direct* published
+   listing — the seed has a city (Ciudad del Este) whose only listings sit on
+   a child barrio, so its city page 200s live but would otherwise be missing
+   from the sitemap. No new query was added; `getPublicLocation` already
+   existed from S-1.
+
+**Found and fixed while building** (both agents; verified live, not just
+read): a `min-w-0`/overflow bug in `StatTile`/`StatRow` where Instrument
+Serif italic numerals could overflow their grid column and be covered by the
+next cell · the payment-link form's grid narrowed from 5 to 3 columns so
+placeholder text isn't cut off · `publicacion/[slug]`'s `generateMetadata`
+was explicitly setting `openGraph.images` to a non-existent placeholder,
+overriding the new dynamic per-listing `opengraph-image.tsx` — removed.
+
+**Testing**: `npm run typecheck` clean; `npm run build` green both with
+`.env` present and with none at all; `npm run verify` unchanged at 213 + 332
+(no logic touched — confirmed by the forbidden-file check below); Playwright
+screenshots of every admin/panel/cleaner route at desktop and mobile widths,
+plus a live end-to-end click-through of the toast fix; live inspection of
+`sitemap.xml`, `robots.txt`, canonical/hreflang tags, JSON-LD payloads, and
+generated OG image bytes. `git diff --name-only main` confirmed neither
+agent touched `src/db/schema.ts`, any file in `src/db/queries/` or
+`scripts/`, or any `src/lib/*.ts` outside `statement-html.ts` and the new
+pure `seo.ts` — the §4.7 hard limits held.
+
+**KNOWN-ISSUES additions**: the `text-base`-is-a-color-token collision (easy
+to reintroduce, only surfaces visually); no offline/service-worker layer on
+the cleaner page; `sitemap.ts` carries no `lastModified` (no `updatedAt` in
+the browse projection).
+
 ---
 
 ## 9b. WINDOW-1 HANDOFF — everything Sonnet needs (plan §5.O12)
