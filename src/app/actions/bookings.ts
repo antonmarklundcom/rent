@@ -59,7 +59,7 @@ export async function quoteBookingAction(
 ): Promise<ActionResult<BookingQuote>> {
   const parsed = quoteSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Datos de reserva inválidos" };
-  return run(() => quoteForListing(parsed.data));
+  return run(() => quoteForListing({ ...parsed.data, requirePublished: true }));
 }
 
 const requestSchema = quoteSchema.extend({
@@ -80,7 +80,12 @@ export async function requestBookingAction(
   const parsed = requestSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Datos de reserva inválidos" };
   return run(async () => {
-    const { booking } = await createBooking({ ...parsed.data, status: "inquiry", source: "web" });
+    const { booking } = await createBooking({
+      ...parsed.data,
+      status: "inquiry",
+      source: "web",
+      requirePublished: true,
+    });
     revalidatePath("/admin");
     return { id: booking.id, reference: booking.reference, total: booking.total };
   });

@@ -485,6 +485,34 @@ export async function runBookingMoneyChecks(r: CheckRunner): Promise<void> {
   r.equal("comisión con override", overridden.commissionAmount, "210000.00");
   await db.update(listings).set({ commissionPct: null }).where(eq(listings.id, fx.listingId));
 
+  r.section("Superficie pública vs. operador");
+  await db.update(listings).set({ status: "draft" }).where(eq(listings.id, fx.listingId));
+  await r.throwsAsync(
+    "el público no puede cotizar una publicación en borrador",
+    () =>
+      quoteForListing({
+        listingId: fx.listingId,
+        startAt: "2026-10-01",
+        endAt: "2026-10-03",
+        requirePublished: true,
+      }),
+    "listing_unbookable",
+  );
+  const operatorBooking = await createBooking({
+    listingId: fx.listingId,
+    guestName: "Reserva histórica",
+    startAt: "2026-10-01",
+    endAt: "2026-10-03",
+    status: "confirmed",
+    source: "manual",
+  });
+  r.check(
+    "pero el operador sí puede cargarla (alta de un propietario nuevo)",
+    operatorBooking.booking.status === "confirmed",
+  );
+  await transitionBooking(operatorBooking.booking.id, "cancelled");
+  await db.update(listings).set({ status: "published" }).where(eq(listings.id, fx.listingId));
+
   r.section("Máquina de estados sobre la base de datos");
   await r.throwsAsync(
     "inquiry → active es RECHAZADO",
@@ -724,6 +752,44 @@ export async function runBookingMoneyChecks(r: CheckRunner): Promise<void> {
     ]),
     "500000.00",
   );
+
+  r.section("Concurrencia — el candado, no la suerte, evita la sobreventa");
+  // Four simultaneous requests for the same dates. The availability check runs
+  // under FOR UPDATE inside the same transaction as its insert, so exactly one
+  // may win; if this ever reports two, the lock has been lost and the engine is
+  // silently double-booking under load.
+  const raceStart = "2029-02-10";
+  const raceResults = await Promise.all(
+    [1, 2, 3, 4].map((n) =>
+      createBooking({
+        listingId: fx.listingId,
+        guestName: `Carrera ${n}`,
+        startAt: raceStart,
+        endAt: "2029-02-14",
+        status: "confirmed",
+        source: "manual",
+      }).then(
+        () => "ok" as const,
+        (error) => ((error as { code?: string }).code === "unavailable" ? ("busy" as const) : "err"),
+      ),
+    ),
+  );
+  r.equal(
+    "de 4 reservas simultáneas exactamente 1 es aceptada",
+    raceResults.filter((x) => x === "ok").length,
+    1,
+  );
+  r.equal(
+    "las otras 3 son rechazadas por disponibilidad (sin errores inesperados)",
+    raceResults.filter((x) => x === "busy").length,
+    3,
+  );
+  const survivors = await findConflicts({
+    listingId: fx.listingId,
+    startAt: d("2029-02-10T00:00:00Z"),
+    endAt: d("2029-02-14T23:59:00Z"),
+  });
+  r.equal("y sólo una reserva quedó en la base", survivors.length, 1);
 
   r.section("Conflictos residuales");
   const remaining = await findConflicts({

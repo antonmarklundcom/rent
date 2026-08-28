@@ -266,17 +266,3 @@ export async function recordIcalSyncResult(
     .set({ lastSyncedAt: new Date(), lastStatus: status.slice(0, 255) })
     .where(eq(icalSources.id, sourceId));
 }
-
-/** Guard against imported rows losing their source pointer. */
-export async function countOrphanIcalBlocks(executor: Executor = db): Promise<number> {
-  const rows = await executor
-    .select({ id: availabilityBlocks.id })
-    .from(availabilityBlocks)
-    .where(
-      and(
-        eq(availabilityBlocks.reason, "external_ical"),
-        isNull(availabilityBlocks.icalSourceId),
-      ),
-    );
-  return rows.length;
-}

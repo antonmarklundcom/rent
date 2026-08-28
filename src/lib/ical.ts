@@ -56,7 +56,7 @@ export function unfoldLines(text: string): string[] {
 type ContentLine = { name: string; params: Record<string, string>; value: string };
 
 /** `DTSTART;VALUE=DATE:20260304` → name, params, value. */
-export function parseContentLine(line: string): ContentLine | null {
+function parseContentLine(line: string): ContentLine | null {
   const colon = indexOfUnquoted(line, ":");
   if (colon < 0) return null;
   const head = line.slice(0, colon);
@@ -175,7 +175,7 @@ export function parseIcalDate(
  * Uses the platform's IANA database via Intl; an unknown zone falls back to
  * UTC rather than throwing, because one malformed feed must not stop a sync.
  */
-export function tzOffsetMs(tz: string, utcMs: number): number {
+function tzOffsetMs(tz: string, utcMs: number): number {
   let parts: Intl.DateTimeFormatPart[];
   try {
     parts = new Intl.DateTimeFormat("en-US", {
@@ -306,11 +306,11 @@ export function escapeText(value: string): string {
     .replace(/\r?\n/g, "\\n");
 }
 
-export function formatIcalDateTime(date: Date): string {
+function formatIcalDateTime(date: Date): string {
   return `${date.toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`;
 }
 
-export function formatIcalDate(date: Date): string {
+function formatIcalDate(date: Date): string {
   return date.toISOString().slice(0, 10).replace(/-/g, "");
 }
 

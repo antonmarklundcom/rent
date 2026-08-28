@@ -21,7 +21,7 @@ export const MS_PER_DAY = 86_400_000;
 const CLOCK_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const YMD_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-export function parseClock(clock: string | null | undefined, fallback: string): [number, number] {
+function parseClock(clock: string | null | undefined, fallback: string): [number, number] {
   const match = CLOCK_RE.exec(clock ?? "") ?? CLOCK_RE.exec(fallback);
   if (!match) return [0, 0];
   return [Number(match[1]), Number(match[2])];
@@ -43,10 +43,6 @@ export function parseYmd(value: string): Date {
     throw new DomainError(`Fecha inexistente: ${value}`, "invalid_range", { value });
   }
   return date;
-}
-
-export function formatYmd(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }
 
 /** `2026-03-04` + `14:00` → `2026-03-04T14:00:00Z`. */

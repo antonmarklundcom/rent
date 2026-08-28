@@ -1,8 +1,10 @@
 /**
  * Activity log (plan §5.O2): every money- or legally-adjacent mutation writes
- * one row here. Deliberately fire-and-forget-safe — a logging failure must
- * never roll back the business write it describes, so callers that are outside
- * a transaction can ignore the returned promise's failure.
+ * one row here.
+ *
+ * Callers pass their transaction, so the audit row commits or rolls back WITH
+ * the write it describes. That is the point: for money movements a trail that
+ * can silently diverge from the ledger is worse than none.
  */
 import { db } from "@/db";
 import { activityLog } from "@/db/schema";

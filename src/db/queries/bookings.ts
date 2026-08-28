@@ -59,7 +59,7 @@ export type BookingContext = {
 };
 
 /** Everything the price and availability engines need about one listing. */
-export async function loadBookingContext(
+async function loadBookingContext(
   listingId: number,
   executor: Executor = db,
 ): Promise<BookingContext> {
@@ -88,13 +88,24 @@ export async function loadBookingContext(
   };
 }
 
+/** The public surface only ever touches published listings. */
+function assertBookable(context: BookingContext, requirePublished?: boolean): void {
+  if (requirePublished && context.listing.status !== "published") {
+    throw new DomainError(
+      "Esta publicación no está disponible",
+      "listing_unbookable",
+      { listingId: context.listing.id, listingStatus: context.listing.status },
+    );
+  }
+}
+
 /**
  * Normalise a requested range into the UTC datetime range the engine stores
  * (plan §9, O-1 judgment call 1). Stays may be given as `YYYY-MM-DD` and are
  * materialised at the listing's check-in/check-out clock times; cars are
  * always given as instants.
  */
-export function normaliseRange(
+function normaliseRange(
   context: Pick<BookingContext, "vertical" | "checkInTime" | "checkOutTime">,
   input: { startAt: Date | string; endAt: Date | string },
 ): { startAt: Date; endAt: Date } {
@@ -124,6 +135,13 @@ export type QuoteRequest = {
   extras?: ExtraRequest[];
   promoCode?: string | null;
   now?: Date;
+  /**
+   * Refuse anything but a `published` listing. Set by the PUBLIC actions only:
+   * a draft listing must not be priceable by a stranger who guessed its id,
+   * while an operator may legitimately record a booking on a listing that is
+   * still being onboarded.
+   */
+  requirePublished?: boolean;
 };
 
 export type BookingQuote = PriceQuote & {
@@ -146,6 +164,7 @@ export async function quoteForListing(
   executor: Executor = db,
 ): Promise<BookingQuote> {
   const context = await loadBookingContext(request.listingId, executor);
+  assertBookable(context, request.requirePublished);
   const { startAt, endAt } = normaliseRange(context, request);
 
   const extras = await resolveExtraSelections(
@@ -205,6 +224,8 @@ export type CreateBookingInput = {
   guestCount?: number | null;
   notes?: string | null;
   now?: Date;
+  /** See `QuoteRequest.requirePublished` — set by the public actions only. */
+  requirePublished?: boolean;
 };
 
 export type CreatedBooking = {
@@ -232,13 +253,7 @@ export async function createBooking(
 
   return db.transaction(async (tx) => {
     const context = await loadBookingContext(input.listingId, tx);
-    if (context.listing.status !== "published" && status === "confirmed") {
-      throw new DomainError(
-        "No se puede confirmar una reserva sobre una publicación no publicada",
-        "listing_unbookable",
-        { listingId: input.listingId, listingStatus: context.listing.status },
-      );
-    }
+    assertBookable(context, input.requirePublished);
     const { startAt, endAt } = normaliseRange(context, input);
 
     if (occupiesCalendar(status)) {
@@ -521,46 +536,4 @@ export async function listBookingsForListings(
     )
     .orderBy(desc(bookings.startAt))
     .limit(options.limit ?? 200);
-}
-
-/** Completed bookings that closed inside a period, for one owner (#3). */
-export async function listCompletedBookingsForOwner(
-  ownerId: number,
-  window: { startAt: Date; endAt: Date },
-  executor: Executor = db,
-) {
-  return executor
-    .select({
-      booking: bookings,
-      listingTitle: listings.title,
-      listingId: listings.id,
-      vertical: listings.vertical,
-    })
-    .from(bookings)
-    .innerJoin(listings, eq(listings.id, bookings.listingId))
-    .where(
-      and(
-        eq(listings.ownerId, ownerId),
-        eq(bookings.status, "completed"),
-        sql`${bookings.endAt} >= ${window.startAt}`,
-        sql`${bookings.endAt} < ${window.endAt}`,
-      ),
-    )
-    .orderBy(asc(bookings.endAt));
-}
-
-/** Vertical-specific detail for a booking's listing (used by inspections in O-3). */
-export async function getListingVerticalDetail(listingId: number, executor: Executor = db) {
-  const [row] = await executor
-    .select({
-      listing: listings,
-      stay: stayDetails,
-      car: carDetails,
-    })
-    .from(listings)
-    .leftJoin(stayDetails, eq(stayDetails.listingId, listings.id))
-    .leftJoin(carDetails, eq(carDetails.listingId, listings.id))
-    .where(eq(listings.id, listingId))
-    .limit(1);
-  return row ?? null;
 }
