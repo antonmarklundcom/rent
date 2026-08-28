@@ -561,7 +561,7 @@ insert; it now reads the booking's existing keys and inserts the gap.
 
 ### Phase S-1 — Public site UI + imagery (S1, S2, S4) — PR pending
 
-**2026-08-28 — S-1 built, PR not yet opened at time of writing.** The public
+**2026-08-28 — S-1 merged.** The public
 site now has a real design (`web-design-system` skill, WARM CRAFT track:
 Instrument Serif + Inter, `#FBF7F1`/`#2A1D14`/`#B4762C`), every §6.S2 page, and
 an attempted §6.S4 imagery pass — see the imagery note below before assuming
@@ -606,12 +606,31 @@ added under the §9b rule for the location-page breadcrumb — nothing in
    afterwards, so without the mount check the glyph flashed once before
    settling.
 
+**Found and fixed in the pre-handoff audit** (a second Sonnet session resumed
+this branch from a single unmerged "attempt" commit — the audit below is that
+session's contribution): **`/[vertical]/[ciudad]/[barrio]` ignored its own
+`ciudad` segment.** `LocationLanding` looked a barrio up by its own slug only,
+so `/alojamientos/<any-string>/asuncion-villa-morra` 200'd identically to the
+real `/alojamientos/asuncion/asuncion-villa-morra` — unbounded duplicate-content
+URLs for every barrio, working against the exact SEO goal §6.S5 is for. Fixed
+by threading the URL's `ciudad` segment into `LocationLanding` as `parentSlug`
+and 404ing when it does not match the resolved location's actual parent;
+`getPublicLocation` already returned the parent, so no query change was
+needed. Verified with a live route sweep (`/alojamientos/<real-city>/<real-barrio>`
+still 200s, any mismatched or invented city segment 404s) before re-running
+`npm run verify` (332/332) and `npm run build` (green with `.env` and with no
+env at all).
+
 **Imagery (§6.S4) — attempted, not completed; not a foundation gap.** MCP
 image generation works from this session (verified with a live test
-generation), but this session's sandboxed egress proxy blocks fetching the
-result bytes — confirmed with a direct `curl` of a real `result_url` against
-Higgsfield's CDN (`403`, same host-allowlist policy that blocks
-`example.com`). The `higgsfield-web-imagery` skill's documented fallback for
+generation, both in the original attempt and independently re-confirmed by
+the pre-handoff-audit session), but this session's sandboxed egress proxy
+blocks fetching the result bytes — confirmed with a direct `curl` of a real
+`result_url` against Higgsfield's CDN (`403`, same host-allowlist policy that
+blocks `example.com`; the audit session's own re-test got the identical `403`
+via `CONNECT tunnel failed`, per `/root/.ccr/README.md`'s "do not retry or
+route around it — report the blocked host"). The `higgsfield-web-imagery`
+skill's documented fallback for
 exactly this case is a human downloading and re-uploading a zip in chat, which
 does not exist in an unattended phased-build session. `scripts/imagery-manifest.json`
 has the four prompts and destinations a session with normal egress (the local
@@ -630,7 +649,16 @@ locales) showed no missing-translation errors and correct 200/404/307s;
 visual QA at 360/390/1280/1440px against `web-design-system/references/qa-preflight.md`
 (one H1 per page, no overlap, full-bleed + overlap + oversized-statement
 present on the home page, ≤2 consecutive identical section patterns, one
-accent colour, WhatsApp green confined to the CTA glyph).
+accent colour, WhatsApp green confined to the CTA glyph). The pre-handoff
+audit re-ran all of the above against a locally installed MariaDB (no
+`DATABASE_URL` was preconfigured in that session; `.env.example` + a fresh
+`mariadb-server` install stood in for Hostinger) and additionally captured
+real Playwright screenshots of every public route at all four widths against
+a running `next dev` — full-page captures needed an explicit scroll pass
+first, since `motion.js`'s `[data-reveal]` sections start at `opacity:0` until
+their `IntersectionObserver` fires, which a non-scrolling screenshot never
+triggers; once scrolled, cards, typed facts, filters and the booking form all
+render as designed.
 
 ---
 

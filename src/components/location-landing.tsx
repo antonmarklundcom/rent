@@ -19,11 +19,17 @@ export async function LocationLanding({
   vertical,
   basePath,
   slug,
+  parentSlug,
   query,
 }: {
   vertical: Vertical;
   basePath: "/alojamientos" | "/autos";
   slug: string;
+  /** Set only by the `/[ciudad]/[barrio]` route: the URL's city segment must
+   * name this location's actual parent, or the URL is a duplicate-content
+   * alias (any city slug + a valid barrio slug would otherwise 200) rather
+   * than a real address. */
+  parentSlug?: string;
   query: Record<string, string | string[] | undefined>;
 }) {
   const one = (key: string) => {
@@ -33,6 +39,7 @@ export async function LocationLanding({
 
   const location = await getPublicLocation(slug);
   if (!location) notFound();
+  if (parentSlug !== undefined && location.parent?.slug !== parentSlug) notFound();
 
   const [rows, allLocations] = await Promise.all([
     browseListings({
