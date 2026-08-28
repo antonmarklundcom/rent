@@ -10,3 +10,8 @@ Phase rules:
 - Re-runnable; minor issues → `KNOWN-ISSUES.md`; stop only per §4.4.
 
 Exit: build green, earlier checks pass, verify additions prove: task auto-creation, magic-link auth (token grants exactly one task, nothing else), expense linkage, deduction flow, doc gate. PR merged green. Report pass/fail checklist + judgment calls (also to §9).
+
+## After this phase — hand off to the next (fresh session)
+Hand off ONLY when all four §4.8 gates pass: PR merged green, exit checklist passed, pre-handoff audit done (re-run build + verify scripts, adversarially re-read your merged diff, fix findings), and your §9 build-log entry committed (§4.9). Then spawn the next phase as a NEW session via the claude-code-remote `create_session` tool — `model`: `claude-opus-5`, `prompt` exactly: `Read prompts/opus-4-comms-pages.md in this repo and execute it.`, inherit environment and permission mode (never `plan`) — and end with your phase report. Fresh session = minimal context = cheaper and safer than chaining.
+Fallback if `create_session` is unavailable: continue `prompts/opus-4-comms-pages.md` in THIS window (same model).
+Never hand off with a §4.4 issue open or any gate unmet. If this session dies mid-phase, re-running this prompt in a fresh window resumes (§4.6).

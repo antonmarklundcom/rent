@@ -12,3 +12,8 @@ Phase rules:
 - Minor issues → `KNOWN-ISSUES.md`, keep going. Stop only per §4.4 (missing credential with no fallback, or bad-foundation decision).
 
 Exit: `npm run build` green, migrations + seed + verify pass, `.env.example` complete, PR merged green. Report a pass/fail checklist and any judgment calls (also record them in plan.md §9).
+
+## After this phase — hand off to the next (fresh session)
+Hand off ONLY when all four §4.8 gates pass: PR merged green, exit checklist passed, pre-handoff audit done (re-run build + verify scripts, adversarially re-read your merged diff, fix findings), and your §9 build-log entry committed (§4.9). Then spawn the next phase as a NEW session via the claude-code-remote `create_session` tool — `model`: `claude-opus-5`, `prompt` exactly: `Read prompts/opus-2-booking-money.md in this repo and execute it.`, inherit environment and permission mode (never `plan`) — and end with your phase report. Fresh session = minimal context = cheaper and safer than chaining.
+Fallback if `create_session` is unavailable: continue `prompts/opus-2-booking-money.md` in THIS window (same model).
+Never hand off with a §4.4 issue open or any gate unmet. If this session dies mid-phase, re-running this prompt in a fresh window resumes (§4.6).

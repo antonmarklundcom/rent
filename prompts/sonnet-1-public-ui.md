@@ -12,3 +12,8 @@ Phase rules:
 - Re-runnable; minor issues → `KNOWN-ISSUES.md`; stop only per §4.4.
 
 Exit: build green, all Opus verify checks still pass, every §6.S2 page designed and working with imagery in place, PR merged green. Report pass/fail checklist.
+
+## After this phase — hand off to the next (fresh session)
+Hand off ONLY when all four §4.8 gates pass: PR merged green, exit checklist passed, pre-handoff audit done (re-run build + verify scripts, adversarially re-read your merged diff, fix findings), and your §9 build-log entry committed (§4.9). Then spawn the next phase as a NEW session via the claude-code-remote `create_session` tool — `model`: `claude-sonnet-5`, `prompt` exactly: `Read prompts/sonnet-2-admin-seo.md in this repo and execute it.`, inherit environment and permission mode (never `plan`) — and end with your phase report. Fresh session = minimal context = cheaper and safer than chaining.
+Fallback if `create_session` is unavailable: continue `prompts/sonnet-2-admin-seo.md` in THIS window (same model).
+Never hand off with a §4.4 issue open or any gate unmet. If this session dies mid-phase, re-running this prompt in a fresh window resumes (§4.6).
