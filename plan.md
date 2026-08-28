@@ -559,7 +559,7 @@ insert; it now reads the booking's existing keys and inserts the gap.
   invariant is `published` only) and `listPublishedListings` was superseded by
   `browseListings`.
 
-### Phase S-1 — Public site UI + imagery (S1, S2, S4) — PR pending
+### Phase S-1 — Public site UI + imagery (S1, S2, S4) — merged as [PR #9](https://github.com/antonmarklundcom/rent/pull/9)
 
 **2026-08-28 — S-1 merged.** The public
 site now has a real design (`web-design-system` skill, WARM CRAFT track:
