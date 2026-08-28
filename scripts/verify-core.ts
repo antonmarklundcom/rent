@@ -1,10 +1,17 @@
 /**
- * Phase O-1 verification (plan §5.O12 — extended by every later phase).
+ * Core verification against a real database (plan §5.O12 — extended by every
+ * later phase).
  *
- * Proves, against a real database: migrations apply cleanly, the seed produced
- * the documented fixture, login works per role, cleaners can never log in,
- * owner scoping holds (owner A cannot read or touch owner B), and the cleaner
- * magic link resolves.
+ * O-1 proves: migrations apply cleanly, the seed produced the documented
+ * fixture, login works per role, cleaners can never log in, owner scoping holds
+ * (owner A cannot read or touch owner B), and the cleaner magic link resolves.
+ *
+ * O-2 appends the booking, iCal and money checks from
+ * `scripts/verify-booking-money.ts` — they build and tear down their own
+ * fixtures, so this script stays re-runnable.
+ *
+ * The database-free calculators are pinned separately in
+ * `scripts/verify-logic.ts`; `npm run verify` runs both.
  *
  *   npm run db:migrate && npm run seed && npm run verify
  */
@@ -30,6 +37,8 @@ import { assertCanAccessListing, listingScope, ownedListingIds } from "../src/li
 import { resolveMagicToken } from "../src/lib/magic-link";
 import { listListingsForUser } from "../src/db/queries/listings";
 import { addMoney, percentOf, toMoney } from "../src/lib/money";
+import { CheckRunner } from "./lib/checks";
+import { runBookingMoneyChecks } from "./verify-booking-money";
 
 let failures = 0;
 let checks = 0;
@@ -266,6 +275,12 @@ async function main() {
   check("addMoney is exact on decimal strings", addMoney("0.10", "0.20") === "0.30");
   check("percentOf computes commission", percentOf("650000.00", "20.00") === "130000.00");
   check("toMoney normalises to 2 decimals", toMoney(1234.5) === "1234.50");
+
+  // Phase O-2: booking/availability engine, iCal sync, money engine.
+  const runner = new CheckRunner();
+  await runBookingMoneyChecks(runner);
+  checks += runner.total;
+  failures += runner.failed;
 
   console.log(
     `\n${checks - failures}/${checks} checks passed${failures ? ` — ${failures} FAILED` : ""}\n`,

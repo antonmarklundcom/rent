@@ -11,7 +11,11 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:push": "drizzle-kit push",
     "seed": "tsx scripts/seed.ts",
-    "verify": "tsx scripts/verify-core.ts"
+    "verify": "npm run verify:logic && npm run verify:core",
+    "verify:logic": "tsx scripts/verify-logic.ts",
+    "verify:core": "tsx scripts/verify-core.ts",
+    "sync:ical": "tsx scripts/sync-ical.ts",
+    "statements": "tsx scripts/generate-statements.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

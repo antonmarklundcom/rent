@@ -32,7 +32,29 @@ imports `dotenv/config` on its first line.
 | `npm run db:migrate` | Apply pending migrations |
 | `npm run db:push` | Push the schema straight to a dev database |
 | `npm run seed` | Idempotent seed (plan §5.O12) |
-| `npm run verify` | `scripts/verify-core.ts` — foundation verification |
+| `npm run verify` | Everything below — logic checks, then the database checks |
+| `npm run verify:logic` | `scripts/verify-logic.ts` — pure calculators, **no database needed** |
+| `npm run verify:core` | `scripts/verify-core.ts` — auth, roles, scoping, booking, iCal, money |
+| `npm run sync:ical` | Import every active iCal source (#2) — idempotent, cron-ready |
+| `npm run statements` | Generate monthly owner statements (#3) — idempotent, cron-ready |
+
+### Cron jobs
+
+| Command | Suggested schedule |
+|---|---|
+| `npm run sync:ical` | hourly |
+| `npm run statements` | monthly, on the 1st (defaults to the previous month) |
+
+Both accept arguments: `npm run sync:ical -- 12` syncs only source 12;
+`npm run statements -- 2026-07 3` regenerates July 2026 for owner 3. Re-running
+either is always safe.
+
+## Public endpoints added in phase O-2
+
+| Route | What it serves |
+|---|---|
+| `/api/ical/<token>.ics` | Per-listing availability feed for Airbnb/Booking/Google. The token is the credential; the feed carries no guest data. |
+| `/api/estados/<id>.html` | Owner statement as HTML. Admins see all; an owner sees only their own. |
 
 ## Seed logins
 
@@ -60,6 +82,10 @@ src/db/queries/        every Drizzle query (Window 2 consumes, never writes)
 src/lib/auth-core.ts   credentials + role gate, no Next.js dependency
 src/lib/auth.ts        cookie/session wrapper around auth-core
 src/lib/scope.ts       owner scoping — used by every owner-facing query
+src/lib/dates.ts       half-open [start, end) ranges — THE overlap predicate
+src/lib/pricing.ts     price, extras, promos, commission — pure, no database
+src/lib/booking-state.ts  booking state machine + which states hold the calendar
+src/lib/ical.ts        iCal parsing and generation — pure, no network
 messages/              es + en dictionaries
 scripts/               idempotent jobs (migrate, seed, verify)
 ```

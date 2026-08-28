@@ -20,6 +20,7 @@ import {
   deposits,
   expenses,
   extras,
+  icalSources,
   infoItems,
   inspections,
   leads,
@@ -40,6 +41,8 @@ import {
   users,
   vehicleReminders,
 } from "../src/db/schema";
+
+import { computeCommission, resolveCommissionPct } from "../src/lib/pricing";
 
 const BCRYPT_ROUNDS = 10;
 const DEFAULT_PASSWORD = "Alquilar2026!";
@@ -281,6 +284,9 @@ async function main() {
       ownerId: ownerA.id,
       locationId: carmelitas.id,
       price: "420000.00",
+      // One listing carries an explicit rate so the "listing override → owner
+      // default" resolution in `src/lib/pricing.ts` has a live fixture (#3).
+      commissionPct: "25.00",
       bedrooms: 2,
       bathrooms: 1,
       maxGuests: 4,
@@ -374,6 +380,7 @@ async function main() {
       ownerId: seed.ownerId,
       locationId: seed.locationId,
       status: seed.status ?? "published",
+      commissionPct: seed.commissionPct ?? null,
     });
     await db
       .insert(stayDetails)
@@ -620,6 +627,25 @@ async function main() {
   const corolla = carRows[0]!;
   const onix = carRows[3]!;
 
+  /* ---------------------------------------------------- iCal source (#2) */
+  // Inactive on purpose: a seeded feed URL would make `npm run sync:ical`
+  // fail against the public internet on every demo run. Flip `is_active`
+  // once a real Airbnb/Booking export URL is pasted in.
+  const [existingIcalSource] = await db
+    .select()
+    .from(icalSources)
+    .where(eq(icalSources.listingId, casa.id))
+    .limit(1);
+  if (!existingIcalSource) {
+    await db.insert(icalSources).values({
+      listingId: casa.id,
+      url: "https://www.airbnb.com/calendar/ical/EXAMPLE.ics?s=REEMPLAZAR",
+      label: "Airbnb (ejemplo)",
+      isActive: false,
+    });
+  }
+
+
   const bookingSeeds = [
     {
       reference: "ALQ-SEED01",
@@ -701,8 +727,23 @@ async function main() {
   ];
 
   const bookingRows: Record<string, typeof bookings.$inferSelect> = {};
+  const ownerDefaults = new Map<number, string>([
+    [ownerA.id, "20.00"],
+    [ownerB.id, "15.00"],
+  ]);
   for (const seed of bookingSeeds) {
     const baseTotal = (Number(seed.unitPrice) * seed.units).toFixed(2);
+    // Bookings the engine creates snapshot their commission at confirmation
+    // (src/db/queries/bookings.ts); seeded rows carry the same snapshot so the
+    // demo data matches what the app produces.
+    const commissionPct = resolveCommissionPct(
+      seed.listing.commissionPct,
+      ownerDefaults.get(seed.listing.ownerId) ?? "20.00",
+    );
+    const { commissionAmount } = computeCommission(
+      { baseTotal, discountTotal: "0.00", extrasTotal: "0.00" },
+      commissionPct,
+    );
     await db
       .insert(bookings)
       .values({
@@ -720,6 +761,8 @@ async function main() {
         extrasTotal: "0.00",
         discountTotal: "0.00",
         total: baseTotal,
+        commissionPct,
+        commissionAmount,
         source: "web",
         cancellationPolicy: seed.listing.cancellationPolicy,
         createdBy: admin.id,
@@ -735,6 +778,8 @@ async function main() {
           units: seed.units,
           baseTotal,
           total: baseTotal,
+          commissionPct,
+          commissionAmount,
         },
       });
     const [row] = await db
