@@ -106,6 +106,13 @@ export type ReminderType = (typeof REMINDER_TYPES)[number];
 export type ReminderStatus = (typeof REMINDER_STATUSES)[number];
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+export type PropertyType = (typeof PROPERTY_TYPES)[number];
+export type VehicleType = (typeof VEHICLE_TYPES)[number];
+export type ScheduledMessageStatus = (typeof SCHEDULED_MESSAGE_STATUSES)[number];
+export type MessageDirection = (typeof MESSAGE_DIRECTIONS)[number];
+export type MessageChannel = (typeof MESSAGE_CHANNELS)[number];
+export type LeadForwardStatus = (typeof LEAD_FORWARD_STATUSES)[number];
+export type OnboardingStepStatus = (typeof ONBOARDING_STEP_STATUSES)[number];
 
 /* -------------------------------------------------------------------------- */
 /* People                                                                      */

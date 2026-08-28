@@ -17,6 +17,8 @@ import {
   type BookingQuote,
 } from "@/db/queries/bookings";
 import { createBlock, deleteBlock, getBlockById } from "@/db/queries/blocks";
+import { captureLead } from "@/db/queries/leads";
+import { verticalOfListing } from "@/db/queries/listings";
 import { ADMIN_ROLES } from "@/lib/auth-core";
 import { requireRole } from "@/lib/auth";
 import { BOOKING_STATUSES } from "@/db/schema";
@@ -86,6 +88,28 @@ export async function requestBookingAction(
       source: "web",
       requirePublished: true,
     });
+    // §5.O10 — a booking request IS a lead. Stored on our side first, then
+    // offered to VenderCRM; a CRM failure must never lose the enquiry, so the
+    // capture is deliberately outside the booking's own success path.
+    try {
+      await captureLead({
+        name: booking.guestName,
+        phone: booking.guestPhone,
+        email: booking.guestEmail,
+        message: booking.notes,
+        listingId: booking.listingId,
+        bookingId: booking.id,
+        vertical: await verticalOfListing(booking.listingId),
+        fields: {
+          reference: booking.reference,
+          check_in: booking.startAt.toISOString(),
+          check_out: booking.endAt.toISOString(),
+          total: booking.total,
+        },
+      });
+    } catch (error) {
+      console.error("[lead] booking request", error);
+    }
     revalidatePath("/admin");
     return { id: booking.id, reference: booking.reference, total: booking.total };
   });

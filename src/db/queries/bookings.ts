@@ -23,6 +23,7 @@ import { logActivity } from "@/db/queries/activity";
 import { assertAvailable, type Executor } from "@/db/queries/availability";
 import { assertGuestReady, ensureTurnoverTask } from "@/db/queries/cleaning";
 import { documentGateForBooking } from "@/db/queries/documents";
+import { cancelBookingMessages, enqueueBookingMessages } from "@/db/queries/messages";
 import {
   claimPromoUse,
   releasePromoUse,
@@ -409,6 +410,13 @@ export async function createBooking(
       );
     }
 
+    // #4 — an admin who books a guest in outright skips `inquiry → confirmed`,
+    // so the sequence has to start here too, or that guest silently gets no
+    // confirmation, no pre-arrival and no review request.
+    if (status === "confirmed") {
+      await enqueueBookingMessages(inserted.id, { now: input.now }, actor, tx);
+    }
+
     return {
       documentGateOverridden,
       booking: inserted,
@@ -462,6 +470,9 @@ export type TransitionResult = {
   cleaningTaskId: number | null;
   /** True when an admin confirmed a car booking over an unverified document (#16). */
   documentGateOverridden: boolean;
+  /** Sequence rows this transition queued (#4) or cancelled. */
+  messagesEnqueued: number;
+  messagesCancelled: number;
 };
 
 export type TransitionOptions = {
@@ -574,6 +585,18 @@ export async function transitionBooking(
       cleaningTaskId = task.id;
     }
 
+    // #4 — confirmation is what starts the guest sequence, and cancellation is
+    // what stops it. Both run in THIS transaction: a rolled-back confirmation
+    // must not leave five messages queued for a stay that is not happening,
+    // and a cancelled booking must never greet anybody on arrival day.
+    let messagesEnqueued = 0;
+    let messagesCancelled = 0;
+    if (to === "confirmed") {
+      messagesEnqueued = (await enqueueBookingMessages(current.id, {}, actor, tx)).created;
+    } else if (to === "cancelled") {
+      messagesCancelled = await cancelBookingMessages(current.id, actor, tx);
+    }
+
     await logActivity(
       {
         entity: "booking",
@@ -588,6 +611,8 @@ export async function transitionBooking(
           commissionAmount: patch.commissionAmount ?? current.commissionAmount,
           cleaningTaskId,
           documentGateOverridden,
+          messagesEnqueued,
+          messagesCancelled,
         },
       },
       tx,
@@ -608,7 +633,15 @@ export async function transitionBooking(
       );
     }
 
-    return { booking: updated ?? current, from, to, cleaningTaskId, documentGateOverridden };
+    return {
+      booking: updated ?? current,
+      from,
+      to,
+      cleaningTaskId,
+      documentGateOverridden,
+      messagesEnqueued,
+      messagesCancelled,
+    };
   });
 }
 

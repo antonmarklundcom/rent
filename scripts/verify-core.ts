@@ -7,9 +7,10 @@
  * (owner A cannot read or touch owner B), and the cleaner magic link resolves.
  *
  * O-2 appends the booking, iCal and money checks from
- * `scripts/verify-booking-money.ts`, and O-3 the operations and autos checks
- * from `scripts/verify-operations.ts` — each builds and tears down its own
- * fixtures, so this script stays re-runnable.
+ * `scripts/verify-booking-money.ts`, O-3 the operations and autos checks from
+ * `scripts/verify-operations.ts`, and O-4 the comms, analytics, lead,
+ * onboarding and public-page checks from `scripts/verify-comms.ts` — each
+ * builds and tears down its own fixtures, so this script stays re-runnable.
  *
  * The database-free calculators are pinned separately in
  * `scripts/verify-logic.ts`; `npm run verify` runs both.
@@ -41,6 +42,7 @@ import { addMoney, percentOf, toMoney } from "../src/lib/money";
 import { CheckRunner } from "./lib/checks";
 import { runBookingMoneyChecks } from "./verify-booking-money";
 import { runOperationsChecks } from "./verify-operations";
+import { runCommsChecks } from "./verify-comms";
 
 let failures = 0;
 let checks = 0;
@@ -283,6 +285,8 @@ async function main() {
   await runBookingMoneyChecks(runner);
   // Phase O-3: cleaning, maintenance, expenses, supplies, autos protection.
   await runOperationsChecks(runner);
+  // Phase O-4: comms queue, inbox, analytics, leads, onboarding, public pages.
+  await runCommsChecks(runner);
   checks += runner.total;
   failures += runner.failed;
 

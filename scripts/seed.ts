@@ -44,6 +44,7 @@ import {
 } from "../src/db/schema";
 
 import { computeCommission, resolveCommissionPct } from "../src/lib/pricing";
+import { enqueueBookingMessages, markDueMessages } from "../src/db/queries/messages";
 
 const BCRYPT_ROUNDS = 10;
 const DEFAULT_PASSWORD = "Alquilar2026!";
@@ -1093,6 +1094,11 @@ async function main() {
     .onDuplicateKeyUpdate({ set: { status: "pending" } });
 
   /* -------------------------------------------------------- comms templates */
+  // es-PY voseo (plan §3.D #4/#11). The placeholders are the ones
+  // `src/lib/messaging.ts` knows — anything else renders empty, and
+  // `verify-comms` asserts every seeded body only uses known ones.
+  // The trigger event decides the anchor (confirmation / start_at / end_at);
+  // `offsetMinutes` shifts it.
   await db
     .insert(messageTemplates)
     .values([
@@ -1100,7 +1106,10 @@ async function main() {
         key: "booking_confirmed",
         locale: "es",
         label: "Reserva confirmada",
-        body: "Hola {{guest_name}}, confirmamos tu reserva en {{listing_title}} del {{start_date}} al {{end_date}}. ¡Te esperamos!",
+        body:
+          "¡Hola {{guest_name}}! Confirmamos tu reserva {{reference}} en {{listing_title}}.\n" +
+          "Check-in: {{check_in}}\nCheck-out: {{check_out}}\nTotal: {{total}}\n" +
+          "Cualquier consulta escribinos por acá. ¡Te esperamos!",
         triggerEvent: "booking_confirmed",
         offsetMinutes: 0,
       },
@@ -1108,7 +1117,9 @@ async function main() {
         key: "pre_arrival",
         locale: "es",
         label: "Un día antes de la llegada",
-        body: "Hola {{guest_name}}, mañana te esperamos en {{listing_title}}. El check-in es desde las {{check_in_time}}. Cualquier cosa escribinos por acá.",
+        body:
+          "Hola {{guest_name}}, mañana te esperamos en {{listing_title}}.\n" +
+          "Tu check-in es el {{check_in}}. Si llegás más tarde avisanos por acá así te esperamos.",
         triggerEvent: "pre_arrival",
         offsetMinutes: -1440,
       },
@@ -1116,7 +1127,9 @@ async function main() {
         key: "check_in_day",
         locale: "es",
         label: "Día del check-in",
-        body: "¡Bienvenido {{guest_name}}! Ya podés ingresar a {{listing_title}}. Te paso las instrucciones de acceso.",
+        body:
+          "¡Bienvenido/a {{guest_name}}! Ya podés ingresar a {{listing_title}} (reserva {{reference}}).\n" +
+          "Ahora te paso las instrucciones de acceso. Si necesitás algo, escribinos.",
         triggerEvent: "check_in",
         offsetMinutes: 0,
       },
@@ -1124,20 +1137,38 @@ async function main() {
         key: "check_out_day",
         locale: "es",
         label: "Día del check-out",
-        body: "Hola {{guest_name}}, hoy es tu check-out hasta las {{check_out_time}}. ¡Gracias por elegirnos!",
-        triggerEvent: "check_out",
+        body:
+          "Hola {{guest_name}}, hoy es tu check-out: {{check_out}}.\n" +
+          "Dejá las llaves donde acordamos y avisanos cuando salgas. ¡Gracias por elegirnos!",
+        triggerEvent: "checkout",
         offsetMinutes: 0,
       },
       {
         key: "review_request",
         locale: "es",
         label: "Pedido de reseña en Google",
-        body: "Hola {{guest_name}}, ¿nos dejás una reseña? Nos ayuda muchísimo: {{review_link}}",
+        body:
+          "Hola {{guest_name}}, ¿qué tal estuvo tu estadía en {{listing_title}}?\n" +
+          "Si te sentiste cómodo/a, ¿nos dejás una reseña en Google? Nos ayuda muchísimo: {{review_link}}\n" +
+          "¡Gracias!",
+        // #11 — the review request is just another template on the post-stay
+        // event, one day after checkout.
         triggerEvent: "post_stay",
         offsetMinutes: 1440,
       },
     ])
-    .onDuplicateKeyUpdate({ set: { isActive: true } });
+    .onDuplicateKeyUpdate({
+      set: {
+        // The seed owns the sequence's SHAPE and its demo copy (plan §5.O12).
+        // Re-running restores both — see KNOWN-ISSUES.md before running it on
+        // a database whose templates a human has edited.
+        label: sql`VALUES(label)`,
+        body: sql`VALUES(body)`,
+        triggerEvent: sql`VALUES(trigger_event)`,
+        offsetMinutes: sql`VALUES(offset_minutes)`,
+        isActive: true,
+      },
+    });
 
   const [existingMessage] = await db
     .select()
@@ -1167,6 +1198,17 @@ async function main() {
       },
     ]);
   }
+
+  /* ---------------------------------------------- comms queue for the demo */
+  // The outbox is only demonstrable if something is in it. Enqueue the real
+  // sequence for the confirmed seed bookings through the engine (idempotent),
+  // then run the same "due" sweep the cron does, so a fresh install opens
+  // /admin/mensajes and sees work rather than an empty page.
+  for (const reference of ["ALQ-SEED02", "ALQ-SEED03"]) {
+    const booking = bookingRows[reference];
+    if (booking) await enqueueBookingMessages(booking.id, {}, null);
+  }
+  await markDueMessages();
 
   /* -------------------------------------------------------------- onboarding */
   for (const owner of [ownerA, ownerB]) {

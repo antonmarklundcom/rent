@@ -30,6 +30,21 @@ import {
 } from "../src/lib/reminders";
 import { resolveUploadPath, ACCEPTED_UPLOAD_TYPES, MAX_UPLOAD_BYTES } from "../src/lib/uploads-core";
 import {
+  anchorFor,
+  assertQuestion,
+  buildDraftPrompt,
+  isDue,
+  isMessageEvent,
+  MESSAGE_EVENTS,
+  normalisePhone,
+  placeholdersIn,
+  renderTemplate,
+  scheduleFor,
+  TEMPLATE_PLACEHOLDERS,
+  whatsappLink,
+} from "../src/lib/messaging";
+import { idempotencyKey, readAttribution } from "../src/lib/vendercrm";
+import {
   addDays,
   atClock,
   daysBetween,
@@ -611,5 +626,147 @@ r.equal("una barra embebida se rechaza", resolveUploadPath(["cleaning/../../etc"
 r.equal("una ruta absoluta se rechaza", resolveUploadPath(["/etc/passwd"]), null);
 r.equal("una ruta vacía se rechaza", resolveUploadPath([]), null);
 r.equal("un nombre con espacios se rechaza", resolveUploadPath(["cleaning", "a b.jpg"]), null);
+
+/* -------------------------------------------------------------------------- */
+/* Phase O-4 — comms calculators (plan §5.O9)                                  */
+/* -------------------------------------------------------------------------- */
+
+r.section("Cuándo se manda cada mensaje (#4, #11)");
+
+const anchors = {
+  confirmedAt: new Date("2030-03-01T12:00:00Z"),
+  startAt: new Date("2030-03-10T14:00:00Z"),
+  endAt: new Date("2030-03-15T11:00:00Z"),
+};
+
+r.equal("la confirmación se ancla en el momento de confirmar", anchorFor("booking_confirmed"), "confirmed_at");
+r.equal("el pre-arrival se ancla en el check-in", anchorFor("pre_arrival"), "start_at");
+r.equal("el check-in también", anchorFor("check_in"), "start_at");
+r.equal("el check-out se ancla en la salida", anchorFor("checkout"), "end_at");
+r.equal("y la reseña también", anchorFor("post_stay"), "end_at");
+
+r.equal(
+  "la confirmación sale ya",
+  scheduleFor("booking_confirmed", 0, anchors).toISOString(),
+  anchors.confirmedAt.toISOString(),
+);
+r.equal(
+  "el pre-arrival sale 24 h antes del check-in",
+  scheduleFor("pre_arrival", -1440, anchors).toISOString(),
+  "2030-03-09T14:00:00.000Z",
+);
+r.equal(
+  "la reseña sale 24 h después del check-out",
+  scheduleFor("post_stay", 1440, anchors).toISOString(),
+  "2030-03-16T11:00:00.000Z",
+);
+r.check(
+  "un desfase negativo puede caer en el pasado y no se recorta",
+  scheduleFor("pre_arrival", -1440 * 30, anchors) < anchors.confirmedAt,
+);
+r.check("un mensaje vence cuando llega su momento", isDue(new Date("2030-03-09T14:00:00Z"), new Date("2030-03-09T14:00:00Z")));
+r.check("y no antes", !isDue(new Date("2030-03-09T14:00:00Z"), new Date("2030-03-09T13:59:00Z")));
+r.check("todos los eventos del enum tienen ancla", MESSAGE_EVENTS.every((event) => !!anchorFor(event)));
+r.check("un evento desconocido no es un evento", !isMessageEvent("cumpleanhos"));
+r.check("y un null tampoco", !isMessageEvent(null));
+
+r.section("Render de plantillas");
+
+const full = renderTemplate("Hola {{guest_name}}, {{listing_title}} el {{check_in}}", {
+  guest_name: "Ana",
+  listing_title: "Casa del lago",
+  check_in: "10/03/2030 14:00",
+});
+r.equal("las variables se reemplazan", full.body, "Hola Ana, Casa del lago el 10/03/2030 14:00");
+r.equal("y no queda ninguna faltante", full.missing.length, 0);
+
+const missing = renderTemplate("Dejanos tu reseña: {{review_link}}", { review_link: null });
+r.equal("una variable sin valor se reporta", missing.missing.join(","), "review_link");
+r.check("y no deja el marcador en el texto", !missing.body.includes("{{"));
+
+const unknown = renderTemplate("Hola {{guest_nombre}}", {});
+r.equal("una variable inexistente se reporta aparte", unknown.unknown.join(","), "guest_nombre");
+r.check("nunca lanza", typeof unknown.body === "string");
+r.equal(
+  "los espacios dobles que deja un hueco se colapsan",
+  renderTemplate("a {{review_link}} b", {}).body,
+  "a b",
+);
+r.equal(
+  "los espacios alrededor del nombre de la variable se toleran",
+  renderTemplate("Hola {{ guest_name }}", { guest_name: "Ana" }).body,
+  "Hola Ana",
+);
+r.equal("se listan las variables usadas, sin repetir", placeholdersIn("{{a}} {{a}} {{b}}").join(","), "a,b");
+r.check("el catálogo de variables incluye la reseña", TEMPLATE_PLACEHOLDERS.includes("review_link"));
+
+r.section("Teléfonos paraguayos y enlaces wa.me");
+
+r.equal("un número local con 0 se internacionaliza", normalisePhone("0981 123 456"), "595981123456");
+r.equal("con paréntesis y guiones también", normalisePhone("(0981) 123-456"), "595981123456");
+r.equal("un +595 se limpia", normalisePhone("+595 981 123456"), "595981123456");
+r.equal("un 00595 se limpia", normalisePhone("00595981123456"), "595981123456");
+r.equal("un 595 con 0 nacional pierde el 0", normalisePhone("5950981123456"), "595981123456");
+r.equal("uno sin el 0 inicial recibe el país", normalisePhone("981123456"), "595981123456");
+r.equal("vacío no es un teléfono", normalisePhone(""), null);
+r.equal("null tampoco", normalisePhone(null), null);
+r.equal("un texto sin dígitos tampoco", normalisePhone("no tengo"), null);
+r.equal("algo absurdamente largo se rechaza", normalisePhone("9".repeat(20)), null);
+
+const link = whatsappLink("0981 123 456", "Hola ¿cómo va?");
+r.check("el enlace apunta al número normalizado", link!.startsWith("https://wa.me/595981123456?text="));
+r.check("y el cuerpo va codificado", link!.includes("Hola%20%C2%BFc%C3%B3mo%20va%3F"));
+r.equal("sin teléfono no hay enlace", whatsappLink(null, "hola"), null);
+
+r.section("Contexto del borrador con IA");
+
+const prompt = buildDraftPrompt(
+  {
+    listingTitle: "Casa del lago",
+    guestName: "Ana",
+    bookingReference: "ALQ-TEST01",
+    checkIn: "10/03/2030 14:00",
+    checkOut: "15/03/2030 11:00",
+    infoItems: [{ question: "¿Hay wifi?", answer: "Sí, fibra 100 megas." }],
+  },
+  "¿Tiene wifi?",
+);
+r.check("el prompt lleva la propiedad", prompt.includes("Casa del lago"));
+r.check("y la base de información", prompt.includes("fibra 100 megas"));
+r.check("y la consulta del huésped", prompt.includes("¿Tiene wifi?"));
+r.check(
+  "una propiedad sin base lo dice explícitamente",
+  buildDraftPrompt({ listingTitle: "X", infoItems: [] }, "hola").includes("no hay información cargada"),
+);
+r.throws("una consulta vacía se rechaza", () => assertQuestion("  "), "invalid_amount");
+r.throws("y una absurdamente larga también", () => assertQuestion("a".repeat(2100)), "invalid_amount");
+r.equal("una consulta normal se normaliza", assertQuestion("  ¿hay cochera?  "), "¿hay cochera?");
+
+r.section("VenderCRM: idempotencia y atribución");
+
+r.equal(
+  "el mismo teléfono en la misma hora da la misma clave",
+  idempotencyKey("595981123456", new Date("2030-03-01T10:15:00Z")),
+  idempotencyKey("595981123456", new Date("2030-03-01T10:45:00Z")),
+);
+r.check(
+  "en otra hora, otra clave",
+  idempotencyKey("595981123456", new Date("2030-03-01T10:15:00Z")) !==
+    idempotencyKey("595981123456", new Date("2030-03-01T11:15:00Z")),
+);
+r.check(
+  "otro teléfono, otra clave",
+  idempotencyKey("595981123456", new Date("2030-03-01T10:15:00Z")) !==
+    idempotencyKey("595981999999", new Date("2030-03-01T10:15:00Z")),
+);
+r.check("la clave entra en el rango que exige el CRM (8–100)", idempotencyKey("595981123456").length <= 100);
+
+r.equal(
+  "la cookie de atribución se lee",
+  readAttribution(encodeURIComponent(JSON.stringify({ utm_source: "google" }))).utm_source,
+  "google",
+);
+r.equal("una cookie rota no rompe nada", Object.keys(readAttribution("{no-json")).length, 0);
+r.equal("una cookie ausente tampoco", Object.keys(readAttribution(undefined)).length, 0);
 
 process.exitCode = r.summary("verificaciones de lógica pasaron") ? 1 : 0;
