@@ -185,9 +185,84 @@ Have these ready so neither window stalls: Hostinger MySQL `DATABASE_URL` (+ Rem
 Car-intermediary legal input (unlocks full autos online booking) · defensive domains alquileres.com.py / rentar.com.py · portfolio overlap check vs residency-services content.
 
 ## 9. Build log & handoff (every phase appends before merging — see §4.9)
-_Each phase adds a 5–10 line dated entry: phase id + PR, what now exists, decisions/deviations, where the next phase looks first. Phase O-4 additionally writes the full Window-1 handoff: schema deviations from §5.O2 + why, route map, local run instructions (env, migrate, seed, scripts), image-upload mechanism chosen, owner publish flow chosen (direct vs approval), judgment calls made under §4.4, anything Sonnet must not break._
+_Each phase adds a dated entry: phase id + PR, what now exists, decisions/deviations, where the next phase looks first. Phase O-4 additionally writes the full Window-1 handoff: schema deviations from §5.O2 + why, route map, local run instructions, image-upload mechanism chosen, owner publish flow chosen, judgment calls made under §4.4, anything Sonnet must not break._
 
-_(no entries yet — build not started)_
+### Phase O-1 — Foundation (O1–O3) — merged as PR #2
+
+**2026-08-28 — O-1 merged.** Next.js 15 + Drizzle + MySQL app scaffolded with
+next-intl (es default, en under `/en`); the complete 33-table schema from §5.O2
+is in `src/db/schema.ts` and migrated; auth is iron-session + bcrypt with a
+four-role gate, owner scoping and cleaner magic links. `scripts/seed.ts` and
+`scripts/verify-core.ts` (33 checks) both pass, and `npm run build` succeeds
+with no environment set. Next phase (O-2) should start at `src/db/schema.ts`
+(`bookings`, `availability_blocks`, `extras`, `promo_codes`), `src/lib/money.ts`
+and `src/db/queries/` — the booking engine has no code yet, only its tables.
+
+**Local run**: see `README.md`. Short version: `npm install` → `cp .env.example .env` →
+`npm run db:migrate` → `npm run seed` → `npm run verify` → `npm run dev`.
+`scripts/` are run with tsx, which does **not** auto-load `.env`, so every script
+imports `dotenv/config` on its first line.
+
+**Route map so far** (Spanish names, `es` unprefixed, `en` under `/en`):
+`/` home · `/alojamientos` + `/autos` placeholder browse · `/ingresar` login ·
+`/panel` owner panel · `/admin` admin overview · `/tarea/[token]` cleaner
+magic-link page. Phases O-3/O-4 add the rest per §5.O11.
+
+**Judgment calls made under §4.4** (all in-plan; none needed Anton):
+
+1. **Booking/block ranges are `datetime`, not mixed date/datetime.** §5.O2 says
+   "dates for stays, datetimes for cars". Two range types would mean two overlap
+   implementations, and §5.O4 requires exactly ONE. So `bookings.start_at/end_at`
+   and `availability_blocks.start_at/end_at` are `datetime` in UTC for both
+   verticals; a stay is normalised to the listing's check-in/check-out clock
+   times, stored on `stay_details.check_in_time` / `check_out_time` (defaults
+   14:00 / 11:00). Stay-level date semantics are therefore preserved without a
+   second code path.
+2. **Money is `decimal(14,2)` handled as strings** through `src/lib/money.ts`.
+   mysql2 returns decimals as strings; every arithmetic step rounds to 2
+   decimals. No money value is ever a bare JS float. PYG is displayed with 0
+   fraction digits but stored with 2 so a USD listing needs no migration.
+3. **Price and commission are snapshotted on the booking** (`unit_price`,
+   `units`, `base_total`, `extras_total`, `discount_total`, `total`,
+   `commission_pct`, `commission_amount`), and `booking_extras` snapshots the
+   extra's name and price. Editing a listing or an extra must never rewrite
+   money history.
+4. **No foreign-key constraints are declared.** Relations are declared for the
+   Drizzle query API only. This keeps migrations reorderable and seeds/imports
+   insertable in any order on Hostinger's MySQL; integrity is enforced in the
+   application layer (`src/lib/scope.ts` + the query layer). If cascades become
+   necessary, add them deliberately in one migration.
+5. **Auth is split in two: `src/lib/auth-core.ts` (no Next.js import) and
+   `src/lib/auth.ts` (cookies/session).** This lets `scripts/verify-core.ts` and
+   future cron jobs exercise the exact same credential and role-gate code the
+   app uses, instead of a parallel copy.
+6. **The DB pool is created lazily.** `next build` imports every route module,
+   and §4.5 requires a build to succeed with no env at all — an eagerly-created
+   pool turns a missing `DATABASE_URL` into a failed build. `src/db/index.ts`
+   exports lazy proxies plus `getPool()`, `getDb()` and `closePool()`.
+7. **Everything under `src/app/[locale]` is `force-dynamic`**, because the
+   layout reads the session cookie. Logged in `KNOWN-ISSUES.md` for Window 2 to
+   revisit per-route.
+8. **`next-intl` locale prefixes only, no translated pathnames.** `/en/alojamientos`
+   rather than `/en/stays`. §1.3b requires Spanish default URLs and English under
+   `/en`, which this satisfies; translating slugs later is a routing-config
+   change with no logic impact.
+9. **`owners` is a separate table from `users`.** A `users` row holds identity
+   and role; an `owners` row holds the commercial profile (display name, RUC,
+   default commission). Sessions carry `owners.id` so every owner-scoped query
+   filters without a second lookup. One owner account covers both verticals —
+   the seed's owner A holds a casa *and* an auto, and `verify-core` asserts it.
+10. **Two extra columns beyond §5.O2**: `listings.ical_export_token` (§5.O2 asks
+    for it in prose), and `expenses.statement_id` so the O-7 statement generator
+    can be idempotent by marking what it has already billed.
+
+**Still to be decided by later phases** (§5.O2 tables exist, mechanisms do not):
+image-upload mechanism, owner publish flow (direct vs admin approval).
+
+**Anything Sonnet must not break** (§4.7 in force): `src/db/schema.ts`,
+`src/lib/auth-core.ts`, `src/lib/auth.ts`, `src/lib/session.ts`,
+`src/lib/scope.ts`, `src/lib/money.ts`, and `scripts/`. All Drizzle stays in
+`src/db/queries/`.
 
 ## 10. Backlog (append; never build unplanned)
 - Car legal / full autos booking flow · WhatsApp Business API auto-send · payment gateway integration (v1 is link+manual status) · Airbnb PMS/channel manager · escrow/reviews/renter accounts (model (a)) · map search UI · defensive domains · GBP content loop (`gbp-optimizer`) after launch
