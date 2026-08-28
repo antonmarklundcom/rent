@@ -14,5 +14,7 @@ Phase rules:
 
 Exit: build green, earlier checks pass, admin/panel/cleaner surfaces styled, SEO artifacts verified present, `/en` public site complete, PR merged green. Report pass/fail checklist.
 
-## After this phase — chain to the next (same model)
-When this phase's PR is merged green and the exit checklist fully passes: run the **pre-chain audit** in plan.md §4.8 (re-run build + verify scripts, adversarially re-read your merged diff, fix findings), then open `prompts/sonnet-3-deploy.md` and continue it in THIS same session — the next phase uses the same model. Stop instead of chaining only if a §4.4 condition arose or this phase's exit bar isn't fully met. If the session ends mid-chain, Anton re-pastes the unfinished phase's prompt in a fresh window and it resumes (§4.6).
+## After this phase — hand off to the next (fresh session)
+Hand off ONLY when all four §4.8 gates pass: PR merged green, exit checklist passed, pre-handoff audit done (re-run build + verify scripts, adversarially re-read your merged diff, fix findings), and your §9 build-log entry committed (§4.9). Then spawn the next phase as a NEW session via the claude-code-remote `create_session` tool — `model`: `claude-sonnet-5`, `prompt` exactly: `Read prompts/sonnet-3-deploy.md in this repo and execute it.`, inherit environment and permission mode (never `plan`) — and end with your phase report. Fresh session = minimal context = cheaper and safer than chaining.
+Fallback if `create_session` is unavailable: continue `prompts/sonnet-3-deploy.md` in THIS window (same model).
+Never hand off with a §4.4 issue open or any gate unmet. If this session dies mid-phase, re-running this prompt in a fresh window resumes (§4.6).

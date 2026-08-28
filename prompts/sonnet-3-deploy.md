@@ -15,4 +15,4 @@ Phase rules:
 Exit: live site green, smoke test recorded, redirect verified, Lighthouse sanity pass, `KNOWN-ISSUES.md` + §10 Backlog final, PR merged green. Report: live URLs, full checklist pass/fail, and an exact numbered list of anything Anton must do manually (DNS, env, cron).
 
 ## After this phase — STOP (project complete)
-This is the final phase. No chaining. End with the full report: live URLs, checklist, and Anton's manual-steps list.
+This is the final phase: no handoff, no new session. Complete the §4.8 gates anyway (merged green, exit checklist, audit, final §9 entry), then end with the full report: live URLs, checklist pass/fail, and an exact numbered list of anything Anton must do manually (DNS, env, cron).

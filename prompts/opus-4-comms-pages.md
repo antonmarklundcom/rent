@@ -12,5 +12,7 @@ Phase rules:
 
 Exit: every §5.O12 criterion passes, §9 written, PR merged green. Report the full checklist pass/fail and anything Sonnet must know beyond §9.
 
-## After this phase — STOP (model switch)
-This is the final Opus phase. The next phase (S-1) uses SONNET — do NOT continue past this phase. Run the pre-chain audit from plan.md §4.8 on your merged work anyway (it is the handoff quality gate), finish §9, and end with your report so Anton can start the Sonnet chain.
+## After this phase — hand off to the next (fresh session)
+Hand off ONLY when all four §4.8 gates pass: PR merged green, exit checklist passed, pre-handoff audit done (re-run build + verify scripts, adversarially re-read your merged diff, fix findings), and your §9 build-log entry committed (§4.9). Then spawn the next phase as a NEW session via the claude-code-remote `create_session` tool — `model`: `claude-sonnet-5`, `prompt` exactly: `Read prompts/sonnet-1-public-ui.md in this repo and execute it.`, inherit environment and permission mode (never `plan`) — and end with your phase report. Fresh session = minimal context = cheaper and safer than chaining.
+Fallback if `create_session` is unavailable: MODEL SWITCH — do NOT continue in this window; stop and report so Anton starts a Sonnet window with `prompts/sonnet-1-public-ui.md`.
+Never hand off with a §4.4 issue open or any gate unmet. If this session dies mid-phase, re-running this prompt in a fresh window resumes (§4.6).
