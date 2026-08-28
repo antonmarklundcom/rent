@@ -8,11 +8,18 @@ import {
   reviewDocumentAction,
   uploadInspectionPhotoAction,
 } from "@/app/actions/autos";
+import {
+  createPaymentLinkFormAction,
+  markPaymentLinkPaidFormAction,
+} from "@/app/actions/money";
+import { enqueueForBookingAction } from "@/app/actions/comms";
 import { ActionForm } from "@/components/action-form";
 import { getBookingById } from "@/db/queries/bookings";
 import { getDepositForBooking, refundedAmount } from "@/db/queries/deposits";
 import { documentGateForBooking, listDocumentsForBooking } from "@/db/queries/documents";
 import { listInspectionsForBooking } from "@/db/queries/inspections";
+import { listPaymentLinksForBooking, paidTotal } from "@/db/queries/payments";
+import { listOutbox, listThreadMessages } from "@/db/queries/messages";
 import { DOCUMENT_TYPES, INSPECTION_TYPES } from "@/db/schema";
 import { formatMoney } from "@/lib/money";
 import { requireAdminPage } from "@/lib/page-guards";
@@ -45,12 +52,17 @@ export default async function AdminBookingOpsPage({
   const tDocStatus = await getTranslations("documentStatus");
   const tInspection = await getTranslations("inspectionType");
 
-  const [documents, gate, inspections, deposit] = await Promise.all([
-    listDocumentsForBooking(bookingId),
-    documentGateForBooking({ id: bookingId, vertical: row.vertical }),
-    listInspectionsForBooking(bookingId),
-    getDepositForBooking(bookingId),
-  ]);
+  const [documents, gate, inspections, deposit, payments, queued, thread] =
+    await Promise.all([
+      listDocumentsForBooking(bookingId),
+      documentGateForBooking({ id: bookingId, vertical: row.vertical }),
+      listInspectionsForBooking(bookingId),
+      getDepositForBooking(bookingId),
+      listPaymentLinksForBooking(bookingId),
+      listOutbox({ statuses: ["scheduled", "due", "sent", "cancelled"], limit: 50 }),
+      listThreadMessages({ bookingId }),
+    ]);
+  const bookingMessages = queued.filter((message) => message.bookingId === bookingId);
   const recorded = new Set(inspections.map((i) => i.inspection.type));
   const missing = INSPECTION_TYPES.filter((type) => !recorded.has(type));
 
@@ -313,6 +325,117 @@ export default async function AdminBookingOpsPage({
           </p>
         ) : (
           <p className="text-sm text-neutral-500">Esta reserva no tiene depósito registrado.</p>
+        )}
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="font-medium">Links de pago (#8)</h2>
+        <p className="text-sm text-neutral-600">
+          Cobrado hasta ahora: {formatMoney(paidTotal(payments), row.booking.currency)} de{" "}
+          {formatMoney(row.booking.total, row.booking.currency)}
+        </p>
+        {payments.length > 0 && (
+          <ul className="text-sm">
+            {payments.map((link) => (
+              <li key={link.id} className="flex flex-wrap items-center gap-2 border-b py-1">
+                <span>
+                  {link.provider} · {formatMoney(link.amount, link.currency)} · {link.status}
+                  {link.expiresAt ? ` · vence ${link.expiresAt.toISOString().slice(0, 10)}` : ""}
+                </span>
+                {link.url && (
+                  <a href={link.url} rel="noopener" className="text-blue-700 underline">
+                    abrir
+                  </a>
+                )}
+                {link.status === "pending" && (
+                  <ActionForm
+                    action={markPaymentLinkPaidFormAction}
+                    submitLabel="Marcar pagado"
+                    className="inline"
+                    submitClassName="rounded border px-2 py-0.5 text-xs disabled:opacity-50"
+                  >
+                    <input type="hidden" name="paymentLinkId" value={link.id} />
+                  </ActionForm>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <ActionForm action={createPaymentLinkFormAction} submitLabel="Registrar link">
+          <input type="hidden" name="bookingId" value={bookingId} />
+          <div className="flex flex-wrap gap-2 text-sm">
+            <input
+              name="provider"
+              required
+              placeholder="Bancard / transferencia"
+              className="rounded border border-neutral-300 px-2 py-1"
+            />
+            <input
+              name="amount"
+              required
+              inputMode="decimal"
+              placeholder="monto"
+              className="w-32 rounded border border-neutral-300 px-2 py-1"
+            />
+            <input
+              name="url"
+              placeholder="https://... (opcional)"
+              className="rounded border border-neutral-300 px-2 py-1"
+            />
+            <input
+              name="reference"
+              placeholder="referencia (opcional)"
+              className="rounded border border-neutral-300 px-2 py-1"
+            />
+            <input
+              type="datetime-local"
+              name="expiresAt"
+              className="rounded border border-neutral-300 px-2 py-1"
+            />
+          </div>
+          <p className="text-xs text-neutral-500">
+            v1 no integra la pasarela: se guarda el link y su estado, y se marca pagado a
+            mano. Las fechas se interpretan en UTC.
+          </p>
+        </ActionForm>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="font-medium">Mensajes (#4)</h2>
+        {bookingMessages.length === 0 ? (
+          <p className="text-sm text-neutral-600">
+            Esta reserva todavía no tiene mensajes agendados. Se agendan al confirmarla.
+          </p>
+        ) : (
+          <ul className="text-sm">
+            {bookingMessages.map((message) => (
+              <li key={message.id} className="border-b py-1">
+                {message.sendAfter.toISOString().slice(0, 16).replace("T", " ")} ·{" "}
+                {message.label ?? message.templateKey} · {message.status}
+              </li>
+            ))}
+          </ul>
+        )}
+        <ActionForm
+          action={enqueueForBookingAction}
+          submitLabel="Reagendar la secuencia"
+          submitClassName="rounded border px-3 py-1 text-sm disabled:opacity-50"
+        >
+          <input type="hidden" name="bookingId" value={bookingId} />
+          <p className="text-xs text-neutral-500">
+            Completa lo que falte; nunca duplica lo que ya está agendado.
+          </p>
+        </ActionForm>
+        {thread.length > 0 && (
+          <p className="text-sm">
+            {thread.length} mensaje(s) registrados en la conversación —{" "}
+            <a
+              href={`/admin/inbox?hilo=booking:${bookingId}`}
+              className="text-blue-700 underline"
+            >
+              abrir en la bandeja
+            </a>
+          </p>
         )}
       </section>
     </section>

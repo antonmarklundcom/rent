@@ -429,5 +429,227 @@ imports pruned.
 with a `pending` licence, so the document gate is demonstrable without touching
 a file — a `verified` cédula on `ALQ-SEED06`, and a `held` deposit on it.
 
+### Phase O-4 — Comms, dashboards, functional pages (O9–O12) — merged as PR #7
+
+**2026-08-28 — O-4 merged. Window 1 is complete.** The communication engine,
+the analytics/owner/onboarding/CRM layer and every functional page now exist.
+**No schema shape changed** (seven type aliases exported from
+`src/db/schema.ts`, additive; `drizzle-kit generate` reports nothing to
+migrate). Sonnet starts at §9's **Window-1 handoff** below, then
+`src/db/queries/` and `KNOWN-ISSUES.md`.
+
+**What now exists**: pure libs `src/lib/{messaging,ai-draft,vendercrm}.ts` ·
+query layer `src/db/queries/{messages,analytics,leads,onboarding,panel,users}.ts`
+plus browse/detail in `listings.ts` · actions `src/app/actions/{comms,panel}.ts` ·
+route `POST /api/leads` · script `scripts/process-messages.ts`
+(`npm run messages`, cron every 15 min) · public pages `/`, `/alojamientos`,
+`/autos`, `/publicacion/[slug]` · panel `/panel` + `/panel/publicaciones/[id]` ·
+admin `/admin/{mensajes,inbox,analitica,propietarios,leads,plantillas,publicaciones,reservas,usuarios}` ·
+tests `scripts/verify-comms.ts` (111 checks, called by `verify-core`) plus 51
+new database-free checks in `verify-logic.ts`. `npm run verify` runs **213 + 328**.
+
+**Decisions/deviations made under §4.4** (none needed Anton):
+
+1. **A message's ANCHOR is a property of its event, not of its row.**
+   `message_templates.trigger_event` picks one of five events and
+   `offset_minutes` shifts it, but which booking timestamp the offset is
+   measured from lives in `EVENT_ANCHORS` (`src/lib/messaging.ts`). An admin
+   editing copy cannot accidentally re-anchor a pre-arrival to the checkout
+   date.
+2. **A queued message is rendered ONCE, at enqueue time.**
+   `scheduled_messages.rendered_body` is a snapshot; editing a template changes
+   what future bookings get, never what is already in the outbox. What an
+   operator reviewed is what the guest receives.
+3. **A schedule that has already passed is NOT clamped to "now".** Confirming a
+   booking late enqueues an overdue pre-arrival, shown as *atrasado*. Hiding it
+   would hide that the guest never got a heads-up; the operator cancels it in
+   one click.
+4. **Confirmation enqueues, cancellation cancels — both inside the
+   transition's own transaction.** A rolled-back confirmation leaves no queue
+   rows promising a stay that is not happening, and a cancelled booking never
+   greets anybody on arrival day. Creating a booking directly as `confirmed`
+   (the admin counter path) enqueues too, or that guest would silently get
+   nothing.
+5. **Idempotency is decided by reading, not by `affectedRows`.** MySQL and
+   MariaDB disagree about what an `ON DUPLICATE KEY UPDATE` that changes
+   nothing reports, so `enqueueBookingMessages` reads the booking's existing
+   template keys and inserts the gap. The unique key
+   `scheduled_messages_booking_template_uq` remains the race guard.
+6. **Marking a message sent writes the conversation row in the same
+   transaction**, and is terminal (`already_settled` on a second click). The
+   outbox and the inbox can never disagree about what a guest was told.
+7. **The inbox threads on the BOOKING when there is one.** A guest asking about
+   a stay they have booked belongs to that booking, not to a second
+   listing-level thread. Key format: `booking:<id>` or `listing:<id>`.
+8. **AI drafts never write anything.** `draftReplyAction` returns text into a
+   textarea; only submitting the log form writes a `messages` row, with
+   `ai_drafted` set. "The model suggested this" and "we said this to a guest"
+   stay two different facts. Model: `claude-opus-5` at effort `low`, per the
+   `claude-api` skill; with no `ANTHROPIC_API_KEY` the button is hidden and the
+   inbox says why.
+9. **Occupancy is CLIPPED to its window.** A booking that straddles the window
+   contributes only its overlapping hours, so occupancy can never exceed 100%
+   and two adjacent windows sum to the whole. It uses the same
+   `OCCUPYING_STATUSES` the calendar does, so "booked" and "occupied" cannot
+   disagree.
+10. **Commission is charged on owner gross; extras are ours.** Unchanged from
+    O-2 — restated because §5.O10's "revenue per listing" reports the guest
+    total (`bookings.total`, extras included), while an owner's earnings report
+    subtracts commission. The two numbers are deliberately different.
+11. **Four of the five onboarding steps are DERIVED** (photos, info base, iCal,
+    first published listing) and tick themselves on read; only `contract` needs
+    a human. A checklist that says "photos done" while the listing has none is
+    worse than no checklist. A derived step never un-ticks: deleting the last
+    photo does not un-onboard an owner who has been trading for a year.
+12. **Leads are stored before they are forwarded.** `POST /api/leads` writes our
+    row, then offers it to VenderCRM (`vendercrm-lead-capture`: key server-side
+    only, stable `idempotency_key`, honeypot, never block the visitor). With no
+    key the lead is `pending`, not lost. `forward_status` distinguishes
+    `pending` (never attempted) from `failed` (rejected/unreachable) because the
+    fixes differ. A public booking request creates a lead too, outside the
+    booking's success path so a CRM failure cannot cost the reservation.
+13. **An owner may publish and pause their own listing directly** (the flow
+    O-1 left open). The commercial gate is the onboarding checklist, which an
+    admin sees, not a second approval queue nobody staffs. Owners cannot edit
+    `commission_pct`, `slug`, `owner_id` or `vertical` — that is the contract,
+    a live URL, and the typed-detail relationship.
+14. **`published_at` is stamped on first publish and never moved.** Pausing and
+    republishing must not shuffle a listing back to the top of every browse
+    page.
+15. **Browse filters are GET params on a plain `<form>`.** Every filtered view
+    is a real URL (canonicals in §6.S5), it works with JavaScript off, and the
+    back button behaves.
+16. **`src/lib/vendercrm.ts` carries no `server-only` marker.** `scripts/` run
+    it under tsx, outside Next's bundler. The key stays server-side because it
+    is read from `process.env.VENDERCRM_API_KEY` (never `NEXT_PUBLIC_*`) and
+    nothing in `src/components/` imports the module.
+
+**Seed additions**: the five es-PY voseo templates rewritten to use only
+placeholders the engine knows (the O-1 seed used four that did not exist) and
+correct trigger events; the confirmed seed bookings run through
+`enqueueBookingMessages` + the real due sweep, so `/admin/mensajes` opens with
+work in it rather than an empty page.
+
+**Found and fixed while building**: the O-2 and O-3 verify fixtures now delete
+the `scheduled_messages` and `messages` rows their bookings create, or every
+`npm run verify` left orphan queue rows behind · `listInboxThreads` aliased its
+`COUNT(*)` away from `total`, which MySQL called ambiguous against the joined
+`bookings.total` (caught by a browser smoke test, not by the unit checks).
+
+---
+
+## 9b. WINDOW-1 HANDOFF — everything Sonnet needs (plan §5.O12)
+
+Read this, `KNOWN-ISSUES.md` and `README.md`. You do not need to read O-1…O-3's
+code to start.
+
+### Local run
+
+```bash
+npm install
+cp .env.example .env          # DATABASE_URL + SESSION_SECRET at minimum
+npm run db:migrate
+npm run seed                  # idempotent
+npm run verify                # 213 logic + 328 database checks, all must pass
+npm run dev
+```
+
+`scripts/` run under tsx, which does **not** auto-load `.env` — every script
+imports `dotenv/config` on its first line. Seed logins and the magic-link tokens
+are in `README.md`.
+
+### Route map (es unprefixed, en under `/en`)
+
+| Route | Who | Phase |
+|---|---|---|
+| `/` | public | home: both verticals, featured, location links |
+| `/alojamientos` · `/autos` | public | browse + GET filters |
+| `/publicacion/[slug]` | public | detail + availability + booking request |
+| `/ingresar` | public | login |
+| `/panel` | owner, admin | calendar, earnings, listings, blocks, statements, onboarding |
+| `/panel/publicaciones/[id]` | owner, admin | listing editor, info base, iCal import + export (#2) |
+| `/admin` | admin | backlog + map |
+| `/admin/mensajes` | admin | outbox (#4, #11) |
+| `/admin/inbox` | admin | unified inbox + AI draft (#20) |
+| `/admin/analitica` | admin | analytics (#12) |
+| `/admin/propietarios` | admin | onboarding pipeline (#19) |
+| `/admin/leads` | admin | leads + CRM status |
+| `/admin/plantillas` | admin | message templates |
+| `/admin/dinero` | admin | payment links (#8), statements (#3), extras (#10), promo codes (#18) |
+| `/admin/publicaciones` · `/admin/reservas` · `/admin/usuarios` | admin | entity lists |
+| `/admin/reservas/[id]` | admin | documents, inspections, deposit, payment links, message sequence (#5, #8, #9, #16) |
+| `/admin/limpieza` · `/admin/mantenimiento` · `/admin/flota` | admin | ops (#1, #6, #7, #13, #14, #17) |
+| `/tarea/[token]` | cleaner, no login | task page (#1) |
+| `/api/ical/[token].ics` · `/api/estados/[id].html` · `/api/uploads/...` · `POST /api/leads` | mixed | see README |
+
+**Still to build in Window 2**: `/[vertical]/[ciudad]` and
+`/[vertical]/[ciudad]/[barrio]` location landing pages, `/en/rent-car-paraguay`,
+about/contact, 404 (§6.S2). Every query they need already exists —
+`browseListings({ vertical, locationSlug })` and `browseLocations(vertical)`.
+
+### Schema deviations from §5.O2, and why
+
+The schema is exactly what §5.O2 asked for, with these documented decisions
+(full reasoning in the O-1 and O-2 entries above): booking and block ranges are
+`datetime` in UTC for **both** verticals so ONE overlap function serves both
+(stays carry `stay_details.check_in_time` / `check_out_time`); money is
+`decimal(14,2)` handled as **strings** through `src/lib/money.ts`; price and
+commission are **snapshotted** on the booking; **no foreign keys are declared**
+(integrity is enforced in `src/lib/scope.ts` and the query layer); `owners` is a
+separate table from `users`; two extra columns beyond §5.O2 —
+`listings.ical_export_token` and `expenses.statement_id`. Nothing was added or
+reshaped in O-3 or O-4.
+
+### The two mechanisms O-1 deferred, now decided
+
+- **Image upload** (chosen in O-3): local disk behind a route handler.
+  `UPLOAD_DIR` (default `.uploads/`) written by `src/lib/uploads.ts`, served by
+  `/api/uploads/[...path]`. Not `public/` — that is a build input, so runtime
+  writes there do not survive a Git deploy. **Deploy note**: point `UPLOAD_DIR`
+  at a path OUTSIDE the Git working tree. Swapping in object storage means
+  replacing `storeUpload` and the route; no caller knows where the bytes live.
+  Listing images (`listing_images`) still hold placeholder URLs — S-4 fills
+  them.
+- **Owner publish flow** (chosen in O-4): direct. An owner publishes and pauses
+  their own listing from `/panel/publicaciones/[id]`; there is no admin
+  approval queue. See decision 13 above.
+
+### What Sonnet must NOT break (§4.7 in force)
+
+`src/db/schema.ts` · `src/lib/{auth-core,auth,session,scope,money,dates,pricing,booking-state,ical,cleaning,documents,reminders,messaging,uploads-core}.ts`
+· everything in `src/db/queries/` · everything in `scripts/`.
+All Drizzle lives in `src/db/queries/` — **Sonnet writes no queries.** If a page
+needs data no query returns, add a function there in the same style (owner
+scope through `src/lib/scope.ts`, an optional `Executor` last argument) rather
+than reaching for `db` from a page.
+
+Safe to restyle freely: everything under `src/app/[locale]/`,
+`src/components/`, `messages/*.json`, `src/app/globals.css`.
+
+### Invariants the UI must not quietly undo
+
+1. **Nothing auto-sends.** The outbox exists so a human reads every message
+   before a guest does (plan §1.5). Do not add a "send all" button.
+2. **Only `published` listings are public.** The check is in the query layer;
+   do not add a page that reads `listings` some other way.
+3. **`carDetails.plate` is private** and is never selected by a public query.
+4. **A guest-ready gate has no override** (O-3 decision 2) and the renter
+   document gate's override is admin-only and logged (O-3 decision 3). Neither
+   is a UI affordance to "improve".
+5. **An inquiry does not hold dates**; availability is enforced at
+   confirmation. The public form deliberately produces an inquiry.
+6. **AI drafts require a human to submit them** before they become a logged
+   message.
+
+### Where the numbers come from
+
+`src/db/queries/analytics.ts` returns everything §6.S3's dashboard needs in one
+call: `analyticsOverview(window, scope)` gives the portfolio roll-up, per-listing
+performance, top locations, booking sources, status mix and the expense mix;
+`fleetUtilisation` and `idleVehicles` cover the autos view. Use the `dataviz`
+skill for the charts; do not recompute anything in the page.
+
+---
+
 ## 10. Backlog (append; never build unplanned)
 - Car legal / full autos booking flow · WhatsApp Business API auto-send · payment gateway integration (v1 is link+manual status) · Airbnb PMS/channel manager · escrow/reviews/renter accounts (model (a)) · map search UI · defensive domains · GBP content loop (`gbp-optimizer`) after launch

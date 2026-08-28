@@ -103,6 +103,11 @@ export default async function AdminPage() {
             </Link>
           </li>
           <li>
+            <Link href="/admin/dinero" className="text-blue-700 underline">
+              Dinero — links de pago, estados, extras y códigos
+            </Link>
+          </li>
+          <li>
             <Link href="/admin/analitica" className="text-blue-700 underline">
               Analítica
             </Link>

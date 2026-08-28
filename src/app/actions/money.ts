@@ -21,8 +21,9 @@ import {
   markPaymentLinkPaid,
 } from "@/db/queries/payments";
 import { generateStatement, getStatementDetail } from "@/db/queries/statements";
-import { ADMIN_ROLES, isAdmin } from "@/lib/auth-core";
+import { ADMIN_ROLES, AuthError, isAdmin } from "@/lib/auth-core";
 import { requireRole } from "@/lib/auth";
+import type { FormState } from "@/lib/form-state";
 import { assertCanAccessBooking } from "@/lib/scope";
 import { DomainError } from "@/lib/errors";
 import { renderStatementHtml } from "@/lib/statement-html";
@@ -166,4 +167,79 @@ export async function statementHtmlAction(
     }
     return { html: renderStatementHtml(detail) };
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Form-shaped wrappers (phase O-4 screens)                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The actions above return `ActionResult` and predate `ActionForm`. Rather than
+ * change signatures phase O-2 already proved (and §4.7 freezes for Window 2),
+ * O-4's screens call these thin adapters.
+ */
+async function asFormState<T>(
+  fn: () => Promise<ActionResult<T>>,
+  onOk: (data: T) => string,
+): Promise<FormState> {
+  try {
+    const result = await fn();
+    return result.ok ? { ok: true, message: onOk(result.data) } : { ok: false, error: result.error };
+  } catch (error) {
+    if (error instanceof AuthError) return { ok: false, error: error.message };
+    console.error("[money-form]", error);
+    return { ok: false, error: "No se pudo completar la acción" };
+  }
+}
+
+export async function createPaymentLinkFormAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const expires = String(formData.get("expiresAt") ?? "");
+  return asFormState(
+    () =>
+      createPaymentLinkAction({
+        bookingId: Number(formData.get("bookingId")),
+        provider: String(formData.get("provider") ?? ""),
+        amount: String(formData.get("amount") ?? ""),
+        url: String(formData.get("url") ?? "") || null,
+        reference: String(formData.get("reference") ?? "") || null,
+        // `datetime-local` has no timezone; the app stores UTC everywhere.
+        expiresAt: expires ? new Date(`${expires}:00Z`) : null,
+      }),
+    () => "Link de pago registrado",
+  );
+}
+
+export async function markPaymentLinkPaidFormAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  return asFormState(
+    () => markPaymentLinkPaidAction(Number(formData.get("paymentLinkId"))),
+    () => "Pago marcado como recibido",
+  );
+}
+
+export async function expirePaymentLinksFormAction(): Promise<FormState> {
+  return asFormState(
+    () => expirePaymentLinksAction(),
+    ({ expired }) =>
+      expired === 0 ? "No había links vencidos" : `${expired} link(s) marcados como vencidos`,
+  );
+}
+
+export async function generateStatementFormAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  return asFormState(
+    () =>
+      generateStatementAction({
+        ownerId: Number(formData.get("ownerId")),
+        period: String(formData.get("period") ?? ""),
+      }),
+    ({ netTotal }) => `Estado generado — neto ${netTotal}`,
+  );
 }

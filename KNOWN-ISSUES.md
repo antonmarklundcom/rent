@@ -103,3 +103,61 @@ blocks a later phase.
 - **Owners cannot see cleaning, tickets or expenses yet.** Every O-3 action is
   admin-only; the read queries already take a `listingIds` filter for the
   owner-scoped panel that phase O-4 builds (§5.O10).
+
+## From phase O-4 (comms, dashboards, functional pages)
+
+- **Inline delete forms lose their confirmation.** Same shape as the O-3 issue
+  above: disconnecting an iCal source or deleting an info item removes the row
+  that contained the `ActionForm`, so the green line never renders — the change
+  *did* happen and the list is one item shorter. Window 2 fixes this once, by
+  hoisting the feedback out of `ActionForm` (S-3).
+- **Re-running the seed restores the message templates.** `scripts/seed.ts`
+  owns the shape *and* the demo copy of the five sequence templates, so a
+  re-seed overwrites edits a human made at `/admin/plantillas`. That is right
+  for a demo database and wrong for production: before running `npm run seed`
+  on a live database, know that the template bodies will revert. Narrowing the
+  `onDuplicateKeyUpdate` to structural columns only is a two-line change if
+  this ever bites.
+- **A message whose moment has already passed is still queued.** Confirming a
+  booking the day it ends enqueues a pre-arrival dated in the past; the sweep
+  marks it due immediately and the outbox shows it as *atrasado*. That is
+  deliberate (hiding it would hide that the guest never got a heads-up), but an
+  operator has to cancel it by hand. A "skip anything more than N days late"
+  rule belongs in the processor if the outbox gets noisy.
+- **`markDueMessages` sweeps globally.** It has no per-listing scope, so the
+  15-minute cron and the "Actualizar pendientes" button both flip every due row
+  in the database. Correct for a single-tenant operation; it would need a scope
+  the day the app serves more than one company.
+- **The unified inbox is only as complete as what operators paste in.** v1 has
+  no WhatsApp Business API (plan §1.5), so `messages` rows come from
+  `markScheduledSent` and from the manual log form. A conversation that
+  happened entirely on somebody's phone is not in the inbox.
+- **AI drafts are not rate-limited or budgeted.** Each press of "Borrador con
+  IA" is one Claude API call at whatever the key's account is billed. The
+  button is admin-only and behind a login, so the exposure is a distracted
+  operator rather than the public, but a per-user cap belongs here before the
+  team grows.
+- **`draftReplyAction` does not cache.** Two operators asking the same question
+  about the same listing pay twice. The prompt is deterministic, so a short
+  cache keyed on `(listingId, question)` would be easy if it matters.
+- **Owners cannot see the outbox or the inbox.** Comms is admin-only in v1;
+  every read query already takes a `listingIds` filter, so an owner-scoped view
+  is a page, not an engine change.
+- **`retryPendingLeads` runs from a button, not a cron.** If VenderCRM is down
+  for a day, somebody has to press "Reintentar envío al CRM" at
+  `/admin/leads`. Phase S-3 can add it to the hourly job beside `sync:ical`.
+- **Analytics has no index tuned for it.** `listingPerformance` reads every
+  overlapping booking and clips in JS rather than aggregating in SQL, which is
+  right at this data size (hundreds of bookings) and wrong at a hundred
+  thousand. The window filter uses `bookings.listing_id` + status, both of
+  which are indexed.
+- **User management is read-only.** `/admin/usuarios` lists people and owners;
+  creating and editing accounts is `super_admin` work that plan §2 defines but
+  §5 never scopes, so it sits in §10 Backlog rather than being half-built.
+- **The `en` dictionary is still the O-1 stub.** Every string added by this
+  phase is Spanish literal text in the pages rather than a `next-intl` key.
+  Phase S-5 owns filling both dictionaries for the public site; the ugly admin
+  screens are Spanish-only by design (the operators are Paraguayan).
+- **The public detail page lists image URLs as text.** `listing_images` rows
+  still point at `/images/placeholder-*.jpg`, which do not exist, so rendering
+  them as `<img>` would show broken images. Phase S-4 fills the slots.

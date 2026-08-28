@@ -2,7 +2,12 @@ import { notFound, redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { ActionForm } from "@/components/action-form";
 import { deleteInfoItemAction, saveInfoItemAction } from "@/app/actions/comms";
-import { updateListingAction } from "@/app/actions/panel";
+import {
+  createIcalSourceAction,
+  deleteIcalSourceAction,
+  updateListingAction,
+} from "@/app/actions/panel";
+import { listIcalSources } from "@/db/queries/blocks";
 import { getPanelListing } from "@/db/queries/panel";
 import { listInfoItems } from "@/db/queries/messages";
 import { CANCELLATION_POLICIES, LISTING_STATUSES } from "@/db/schema";
@@ -30,7 +35,10 @@ export default async function PanelListingPage({
 
   const row = await getPanelListing(user, listingId);
   if (!row) notFound();
-  const info = await listInfoItems(listingId);
+  const [info, icalSources] = await Promise.all([
+    listInfoItems(listingId),
+    listIcalSources({ listingId }),
+  ]);
 
   return (
     <section className="space-y-6">
@@ -144,17 +152,70 @@ export default async function PanelListingPage({
         </ActionForm>
       </section>
 
-      {row.listing.icalExportToken && (
-        <section className="space-y-1">
-          <h2 className="font-medium">Calendario para exportar</h2>
-          <code className="block break-all text-xs">
-            /api/ical/{row.listing.icalExportToken}.ics
-          </code>
-          <p className="text-xs text-neutral-500">
-            Pegá esta URL en Airbnb o Booking para que vean tus fechas ocupadas.
+      <section className="space-y-2">
+        <h2 className="font-medium">Calendarios (#2)</h2>
+        {row.listing.icalExportToken && (
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Para exportar</p>
+            <code className="block break-all text-xs">
+              /api/ical/{row.listing.icalExportToken}.ics
+            </code>
+            <p className="text-xs text-neutral-500">
+              Pegá esta URL en Airbnb o Booking para que vean tus fechas ocupadas.
+            </p>
+          </div>
+        )}
+
+        <p className="text-sm font-medium">Para importar</p>
+        {icalSources.length === 0 ? (
+          <p className="text-sm text-neutral-600">
+            No hay calendarios externos conectados.
           </p>
-        </section>
-      )}
+        ) : (
+          <ul className="text-sm">
+            {icalSources.map((source) => (
+              <li key={source.id} className="flex flex-wrap items-center gap-2 border-b py-1">
+                <span className="break-all">
+                  {source.label ?? "Sin nombre"} — {source.url}
+                </span>
+                <span className="text-xs text-neutral-500">
+                  {source.lastSyncedAt
+                    ? `última sincronización ${source.lastSyncedAt.toISOString().slice(0, 16)} (${source.lastStatus ?? "?"})`
+                    : "todavía sin sincronizar"}
+                </span>
+                <ActionForm
+                  action={deleteIcalSourceAction}
+                  submitLabel="Desconectar"
+                  className="inline"
+                  submitClassName="rounded border px-2 py-0.5 text-xs disabled:opacity-50"
+                >
+                  <input type="hidden" name="sourceId" value={source.id} />
+                </ActionForm>
+              </li>
+            ))}
+          </ul>
+        )}
+        <ActionForm action={createIcalSourceAction} submitLabel="Conectar calendario">
+          <input type="hidden" name="listingId" value={listingId} />
+          <label className="flex flex-col text-sm">
+            URL del calendario (Airbnb, Booking, Google)
+            <input
+              name="url"
+              required
+              placeholder="https://www.airbnb.com/calendar/ical/....ics"
+              className="border p-1"
+            />
+          </label>
+          <label className="flex flex-col text-sm">
+            Nombre (opcional)
+            <input name="label" placeholder="Airbnb" className="border p-1" />
+          </label>
+          <p className="text-xs text-neutral-500">
+            Las fechas ocupadas se importan en la próxima sincronización horaria y
+            bloquean el calendario acá.
+          </p>
+        </ActionForm>
+      </section>
     </section>
   );
 }

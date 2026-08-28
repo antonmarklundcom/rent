@@ -26,11 +26,13 @@ import { and, eq, inArray, like } from "drizzle-orm";
 import { db } from "../src/db";
 import {
   activityLog,
+  availabilityBlocks,
   bookingExtras,
   bookings,
   carDetails,
   cleaningTasks,
   expenses,
+  icalSources,
   infoItems,
   leads,
   listings,
@@ -82,6 +84,12 @@ import {
   panelEarnings,
   updatePanelListing,
 } from "../src/db/queries/panel";
+import {
+  createIcalSource,
+  deleteIcalSource,
+  listIcalSources,
+} from "../src/db/queries/blocks";
+import { listAllExtras, listPromoCodes } from "../src/db/queries/extras";
 import { renderTemplate, TEMPLATE_PLACEHOLDERS, placeholdersIn } from "../src/lib/messaging";
 
 const OWNER_EMAIL = "verify-o4@alquilar.local";
@@ -127,6 +135,8 @@ async function teardown(): Promise<void> {
         .delete(activityLog)
         .where(and(eq(activityLog.entity, "booking"), inArray(activityLog.entityId, bookingIds)));
     }
+    await db.delete(availabilityBlocks).where(inArray(availabilityBlocks.listingId, listingIds));
+    await db.delete(icalSources).where(inArray(icalSources.listingId, listingIds));
     await db.delete(messages).where(inArray(messages.listingId, listingIds));
     await db.delete(infoItems).where(inArray(infoItems.listingId, listingIds));
     await db.delete(cleaningTasks).where(inArray(cleaningTasks.listingId, listingIds));
@@ -801,6 +811,67 @@ export async function runCommsChecks(r: CheckRunner): Promise<void> {
     endAt: new Date("2031-01-01T00:00:00Z"),
   });
   r.equal("el otro propietario no ve nada de eso", otherEarnings.gross, "0.00");
+
+  /* ----------------------------------------------------------- iCal sources */
+
+  r.section("Conectar calendarios externos (#2)");
+
+  await r.throwsAsync(
+    "una URL que no es http(s) se rechaza",
+    () => createIcalSource({ listingId: fx.stayId, url: "javascript:alert(1)" }, fx.ownerUser),
+    "invalid_range",
+  );
+  await r.throwsAsync(
+    "y una que no es URL tampoco",
+    () => createIcalSource({ listingId: fx.stayId, url: "no soy una url" }, fx.ownerUser),
+    "invalid_range",
+  );
+  const sourceId = await createIcalSource(
+    { listingId: fx.stayId, url: "https://example.com/cal.ics", label: "Prueba" },
+    fx.ownerUser,
+  );
+  r.equal(
+    "el calendario queda conectado a la publicación",
+    (await listIcalSources({ listingId: fx.stayId })).length,
+    1,
+  );
+  // A block the importer would have written, to prove the cascade.
+  await db.insert(availabilityBlocks).values({
+    listingId: fx.stayId,
+    startAt: new Date("2030-09-01T14:00:00Z"),
+    endAt: new Date("2030-09-05T11:00:00Z"),
+    reason: "external_ical",
+    icalSourceId: sourceId,
+    sourceRef: "verify-o4-uid",
+  });
+  await deleteIcalSource(sourceId, fx.ownerUser);
+  r.equal(
+    "desconectarlo lo borra",
+    (await listIcalSources({ listingId: fx.stayId })).length,
+    0,
+  );
+  r.equal(
+    "y libera los bloqueos que había importado",
+    (
+      await db
+        .select()
+        .from(availabilityBlocks)
+        .where(eq(availabilityBlocks.icalSourceId, sourceId))
+    ).length,
+    0,
+  );
+  await r.throwsAsync(
+    "desconectar uno inexistente se rechaza",
+    () => deleteIcalSource(99_999_999, fx.ownerUser),
+    "not_found",
+  );
+
+  /* ------------------------------------------------------- money catalogues */
+
+  r.section("Catálogos que lee el motor de precios (#10, #18)");
+
+  r.check("los extras sembrados están", (await listAllExtras()).length > 0);
+  r.check("y los códigos promocionales también", (await listPromoCodes()).length > 0);
 
   /* ------------------------------------------------------------- rendering */
 
