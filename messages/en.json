@@ -1,0 +1,73 @@
+{
+  "common": {
+    "brand": "alquilar.com.py",
+    "tagline": "Vacation rentals and car rental in Paraguay",
+    "stays": "Stays",
+    "cars": "Cars",
+    "panel": "Panel",
+    "admin": "Admin",
+    "login": "Sign in",
+    "logout": "Sign out",
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "language": "Language"
+  },
+  "home": {
+    "title": "Rent your next place or car in Paraguay",
+    "intro": "Houses, apartments and vehicles managed by alquilar.com.py.",
+    "browseStays": "Browse stays",
+    "browseCars": "Browse cars"
+  },
+  "auth": {
+    "title": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "invalid": "Wrong email or password",
+    "required": "Enter your email and password",
+    "signedInAs": "Signed in as {name}",
+    "forCleaners": "Cleaners do not need an account: they get a direct link to their task."
+  },
+  "panel": {
+    "title": "Owner panel",
+    "welcome": "Hi {name}",
+    "listings": "Your listings",
+    "noListings": "You have no listings yet.",
+    "commission": "Commission",
+    "status": "Status"
+  },
+  "admin": {
+    "title": "Admin",
+    "welcome": "Hi {name}",
+    "users": "Users",
+    "listings": "Listings",
+    "bookings": "Bookings",
+    "counts": "Database summary"
+  },
+  "cleaner": {
+    "title": "Cleaning task",
+    "invalid": "This link is not valid or has expired.",
+    "property": "Property",
+    "dueBy": "Due",
+    "statusLabel": "Status",
+    "checklist": "Checklist"
+  },
+  "listingStatus": {
+    "draft": "Draft",
+    "published": "Published",
+    "paused": "Paused"
+  },
+  "cleaningStatus": {
+    "needed": "Pending",
+    "in_progress": "In progress",
+    "ready": "Ready"
+  },
+  "errors": {
+    "forbidden": "You do not have permission for this action",
+    "unauthenticated": "Sign in to continue",
+    "notFound": "We could not find what you were looking for",
+    "dbUnavailable": "The database is not configured. Check DATABASE_URL."
+  }
+}

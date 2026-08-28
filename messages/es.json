@@ -1,0 +1,73 @@
+{
+  "common": {
+    "brand": "alquilar.com.py",
+    "tagline": "Alojamientos y autos en alquiler en Paraguay",
+    "stays": "Alojamientos",
+    "cars": "Autos",
+    "panel": "Panel",
+    "admin": "Administración",
+    "login": "Ingresar",
+    "logout": "Cerrar sesión",
+    "loading": "Cargando…",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "back": "Volver",
+    "language": "Idioma"
+  },
+  "home": {
+    "title": "Alquilá tu próximo alojamiento o auto en Paraguay",
+    "intro": "Casas, departamentos y vehículos administrados por alquilar.com.py.",
+    "browseStays": "Ver alojamientos",
+    "browseCars": "Ver autos"
+  },
+  "auth": {
+    "title": "Ingresar",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "submit": "Ingresar",
+    "invalid": "Email o contraseña incorrectos",
+    "required": "Completá el correo y la contraseña",
+    "signedInAs": "Sesión iniciada como {name}",
+    "forCleaners": "Los encargados de limpieza no necesitan cuenta: reciben un enlace directo a su tarea."
+  },
+  "panel": {
+    "title": "Panel del propietario",
+    "welcome": "Hola {name}",
+    "listings": "Tus publicaciones",
+    "noListings": "Todavía no tenés publicaciones cargadas.",
+    "commission": "Comisión",
+    "status": "Estado"
+  },
+  "admin": {
+    "title": "Administración",
+    "welcome": "Hola {name}",
+    "users": "Usuarios",
+    "listings": "Publicaciones",
+    "bookings": "Reservas",
+    "counts": "Resumen de la base de datos"
+  },
+  "cleaner": {
+    "title": "Tarea de limpieza",
+    "invalid": "Este enlace no es válido o ya venció.",
+    "property": "Propiedad",
+    "dueBy": "Para",
+    "statusLabel": "Estado",
+    "checklist": "Checklist"
+  },
+  "listingStatus": {
+    "draft": "Borrador",
+    "published": "Publicada",
+    "paused": "Pausada"
+  },
+  "cleaningStatus": {
+    "needed": "Pendiente",
+    "in_progress": "En proceso",
+    "ready": "Lista"
+  },
+  "errors": {
+    "forbidden": "No tenés permiso para esta acción",
+    "unauthenticated": "Iniciá sesión para continuar",
+    "notFound": "No encontramos lo que buscabas",
+    "dbUnavailable": "La base de datos no está configurada. Revisá DATABASE_URL."
+  }
+}
