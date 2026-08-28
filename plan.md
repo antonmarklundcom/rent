@@ -322,6 +322,13 @@ the lock, not luck, prevents double-booking). `npm run verify` runs both:
 8. **Deposits and payment links are terminal once settled.** Re-settling raises
    `already_settled` rather than overwriting; a correction is a new record.
 
+9. **`requirePublished` gates the PUBLIC surface only** (added in the phase's
+   §4.8c audit, [PR #4](https://github.com/antonmarklundcom/rent/pull/4)). The
+   two public actions — quote and booking request — refuse a listing that is not
+   `published`; an operator may still record a booking on a listing that is
+   still being onboarded. Availability, not publish status, is what the state
+   machine enforces at confirmation.
+
 **Schema**: no shape change. Ten enum *types* were exported from
 `src/db/schema.ts` (`PriceUnit`, `BlockReason`, …) so app code stops re-typing
 literal unions — additive, no migration.
