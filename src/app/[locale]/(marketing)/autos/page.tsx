@@ -1,13 +1,35 @@
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BrowseFilters } from "@/components/browse-filters";
+import { JsonLd } from "@/components/json-ld";
 import { ListingCard } from "@/components/listing-card";
 import { browseListings, browseLocations } from "@/db/queries/listings";
 import { VEHICLE_TYPES, type VehicleType } from "@/db/schema";
+import { absoluteLocaleUrl, bilingualAlternates, buildItemListJsonLd } from "@/lib/seo";
 
 /**
  * Browse autos (plan §5.O11 → §6.S2 restyle). Same engine as alojamientos,
  * different typed facts — the vertical is the only difference (plan §2).
+ *
+ * Canonical is always the bare `/autos`, filters never fork it (plan §6.S5
+ * point 7) — see the matching comment on `alojamientos/page.tsx`.
  */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "browse" });
+  return {
+    title: t("carMetaTitle"),
+    description: t("carMetaDescription"),
+    alternates: bilingualAlternates(locale, "/autos"),
+    openGraph: { title: t("carMetaTitle"), description: t("carMetaDescription"), type: "website" },
+    twitter: { card: "summary_large_image", title: t("carMetaTitle"), description: t("carMetaDescription") },
+  };
+}
+
 export default async function BrowseCarsPage({
   params,
   searchParams,
@@ -45,6 +67,13 @@ export default async function BrowseCarsPage({
 
   return (
     <section className="section pt-10">
+      {rows.length > 0 && (
+        <JsonLd
+          data={buildItemListJsonLd(
+            rows.map((row) => ({ name: row.title, url: absoluteLocaleUrl(locale, `/publicacion/${row.slug}`) })),
+          )}
+        />
+      )}
       <div className="wrap space-y-6">
         <div>
           <span className="eyebrow">{t("carEyebrow")}</span>

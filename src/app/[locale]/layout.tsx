@@ -6,6 +6,7 @@ import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { routing } from "@/i18n/routing";
 import { SiteHeader } from "@/components/site-header";
+import { SITE_URL } from "@/lib/seo";
 import "../globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -42,8 +43,14 @@ export async function generateMetadata({
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "common" });
   return {
+    metadataBase: new URL(SITE_URL),
     title: { default: t("brand"), template: `%s · ${t("brand")}` },
     description: t("tagline"),
+    // Per-route pages set their own `alternates` (plan §6.S5) — this is only
+    // a fallback for any segment that does not (there is none left under
+    // `(marketing)`, but admin/panel/tarea inherit it harmlessly since they
+    // are disallowed in robots.ts anyway).
+    alternates: { languages: { "es-PY": `${SITE_URL}/`, en: `${SITE_URL}/en` } },
   };
 }
 

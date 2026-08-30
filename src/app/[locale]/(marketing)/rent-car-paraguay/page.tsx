@@ -6,6 +6,7 @@ import { SafeImage } from "@/components/safe-image";
 import { ButtonLink } from "@/components/ui/button";
 import { WhatsAppCta } from "@/components/whatsapp-cta";
 import { browseListings, browseLocations } from "@/db/queries/listings";
+import { englishOnlyAlternates } from "@/lib/seo";
 import { normalisePhone } from "@/lib/messaging";
 
 /**
@@ -22,7 +23,15 @@ export async function generateMetadata({
   const { locale } = await params;
   if (locale !== "en") return {};
   const t = await getTranslations({ locale, namespace: "rentCar" });
-  return { title: t("metaTitle"), description: t("metaDescription") };
+  const title = t("metaTitle");
+  const description = t("metaDescription");
+  return {
+    title,
+    description,
+    alternates: englishOnlyAlternates("/rent-car-paraguay"),
+    openGraph: { title, description, type: "website" },
+    twitter: { card: "summary_large_image", title, description },
+  };
 }
 
 export default async function RentCarParaguayPage({

@@ -1,4 +1,6 @@
 import { Link } from "@/i18n/navigation";
+import { Badge, bookingStatusTone } from "@/components/ui/badge";
+import { EmptyState, PageHeader, Section, TableWrap, table, th, td } from "@/components/ui/page-header";
 import { listBookingsForListings } from "@/db/queries/bookings";
 import { listPanelListings } from "@/db/queries/panel";
 import { BOOKING_STATUSES, type BookingStatus } from "@/db/schema";
@@ -29,57 +31,70 @@ export default async function AdminBookingsPage({
   );
 
   return (
-    <section className="space-y-4">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Reservas</h1>
-        <p className="text-sm">
-          <a href="/admin/reservas" className={`mr-3 underline ${status ? "text-blue-700" : "font-semibold"}`}>
-            todas
-          </a>
-          {BOOKING_STATUSES.map((value) => (
+    <div className="space-y-4">
+      <PageHeader
+        title="Reservas"
+        subtitle={
+          <div className="flex flex-wrap gap-1">
             <a
-              key={value}
-              href={`?estado=${value}`}
-              className={`mr-3 underline ${value === status ? "font-semibold" : "text-blue-700"}`}
+              href="/admin/reservas"
+              className={`rounded-full px-3 py-1 text-xs ${!status ? "bg-ink text-base font-medium" : "border border-ink/15 hover:border-ink/30"}`}
             >
-              {value}
+              todas
             </a>
-          ))}
-        </p>
-      </header>
+            {BOOKING_STATUSES.map((value) => (
+              <a
+                key={value}
+                href={`?estado=${value}`}
+                className={`rounded-full px-3 py-1 text-xs ${value === status ? "bg-ink text-base font-medium" : "border border-ink/15 hover:border-ink/30"}`}
+              >
+                {value}
+              </a>
+            ))}
+          </div>
+        }
+      />
 
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b">
-            <th className="py-1">Referencia</th>
-            <th>Publicación</th>
-            <th>Huésped</th>
-            <th>Fechas</th>
-            <th>Estado</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ booking, listingTitle }) => (
-            <tr key={booking.id} className="border-b">
-              <td className="py-1">
-                <Link href={`/admin/reservas/${booking.id}`} className="text-blue-700 underline">
-                  {booking.reference}
-                </Link>
-              </td>
-              <td>{listingTitle}</td>
-              <td>{booking.guestName}</td>
-              <td>
-                {booking.startAt.toISOString().slice(0, 10)} →{" "}
-                {booking.endAt.toISOString().slice(0, 10)}
-              </td>
-              <td>{booking.status}</td>
-              <td>{formatMoney(booking.total, booking.currency)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {rows.length === 0 && <p className="text-sm text-neutral-600">Sin reservas.</p>}
-    </section>
+      <Section>
+        {rows.length === 0 ? (
+          <EmptyState>Sin reservas.</EmptyState>
+        ) : (
+          <TableWrap>
+            <table className={table}>
+              <thead>
+                <tr>
+                  <th className={th}>Referencia</th>
+                  <th className={th}>Publicación</th>
+                  <th className={th}>Huésped</th>
+                  <th className={th}>Fechas</th>
+                  <th className={th}>Estado</th>
+                  <th className={th}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ booking, listingTitle }) => (
+                  <tr key={booking.id}>
+                    <td className={`${td} font-medium`}>
+                      <Link href={`/admin/reservas/${booking.id}`} className="text-accent hover:underline">
+                        {booking.reference}
+                      </Link>
+                    </td>
+                    <td className={td}>{listingTitle}</td>
+                    <td className={td}>{booking.guestName}</td>
+                    <td className={td}>
+                      {booking.startAt.toISOString().slice(0, 10)} → {booking.endAt.toISOString().slice(0, 10)}
+                    </td>
+                    <td className={td}>
+                      <Badge tone={bookingStatusTone(booking.status)}>{booking.status}</Badge>
+                    </td>
+                    <td className={`${td} tabular-nums`}>{formatMoney(booking.total, booking.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+      </Section>
+    </div>
   );
 }

@@ -14,6 +14,16 @@ import {
 } from "@/app/actions/money";
 import { enqueueForBookingAction } from "@/app/actions/comms";
 import { ActionForm } from "@/components/action-form";
+import {
+  Badge,
+  bookingStatusTone,
+  depositStatusTone,
+  documentStatusTone,
+  messageStatusTone,
+  paymentStatusTone,
+} from "@/components/ui/badge";
+import { fieldClass, labelClass } from "@/components/ui/field";
+import { EmptyState, PageHeader, Section, TableWrap, table, th, td } from "@/components/ui/page-header";
 import { getBookingById } from "@/db/queries/bookings";
 import { getDepositForBooking, refundedAmount } from "@/db/queries/deposits";
 import { documentGateForBooking, listDocumentsForBooking } from "@/db/queries/documents";
@@ -67,109 +77,111 @@ export default async function AdminBookingOpsPage({
   const missing = INSPECTION_TYPES.filter((type) => !recorded.has(type));
 
   return (
-    <section className="space-y-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Reserva {row.booking.reference}</h1>
-        <p>
-          {row.listingTitle} · {row.vertical === "car" ? "auto" : "alojamiento"} ·{" "}
-          {row.booking.guestName}
-        </p>
-        <p className="text-sm text-neutral-600">
-          {row.booking.status} · {row.booking.startAt.toISOString().slice(0, 16).replace("T", " ")}{" "}
-          → {row.booking.endAt.toISOString().slice(0, 16).replace("T", " ")} ·{" "}
-          {formatMoney(row.booking.total, row.booking.currency)}
-        </p>
-      </header>
+    <div className="space-y-8">
+      <PageHeader
+        title={`Reserva ${row.booking.reference}`}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-2">
+            {row.listingTitle} · {row.vertical === "car" ? "auto" : "alojamiento"} ·{" "}
+            {row.booking.guestName}
+            <Badge tone={bookingStatusTone(row.booking.status)}>{row.booking.status}</Badge>
+            <span className="text-ink/50">
+              {row.booking.startAt.toISOString().slice(0, 16).replace("T", " ")} →{" "}
+              {row.booking.endAt.toISOString().slice(0, 16).replace("T", " ")} ·{" "}
+              {formatMoney(row.booking.total, row.booking.currency)}
+            </span>
+          </span>
+        }
+      />
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Documentos del conductor (#16)</h2>
+      <Section title="Documentos del conductor (#16)">
         {!gate.applies ? (
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm text-ink/50">
             La verificación de documentos aplica sólo a reservas de autos.
           </p>
         ) : gate.ok ? (
-          <p className="rounded bg-green-50 p-2 text-sm text-green-800">
+          <p className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">
             Documentos en regla: la reserva puede confirmarse.
           </p>
         ) : (
-          <p className="rounded bg-amber-50 p-2 text-sm text-amber-900">{gate.message}</p>
+          <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">{gate.message}</p>
         )}
 
         {documents.length > 0 && (
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="py-1">#</th>
-                <th>Tipo</th>
-                <th>Archivo</th>
-                <th>Estado</th>
-                <th>Revisar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {documents.map((document) => (
-                <tr key={document.id} className="border-b align-top">
-                  <td className="py-2">{document.id}</td>
-                  <td>{tDocType(document.type)}</td>
-                  <td>
-                    <a href={document.fileUrl} className="text-blue-700 underline">
-                      ver
-                    </a>
-                  </td>
-                  <td>
-                    {tDocStatus(document.status)}
-                    {document.rejectionReason && (
-                      <span className="block text-xs text-neutral-500">
-                        {document.rejectionReason}
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    {document.status === "pending" ? (
-                      <div className="space-y-1">
-                        <ActionForm
-                          action={reviewDocumentAction}
-                          submitLabel="Verificar"
-                          className="space-y-1"
-                          submitClassName="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
-                        >
-                          <input type="hidden" name="documentId" value={document.id} />
-                          <input type="hidden" name="bookingId" value={bookingId} />
-                          <input type="hidden" name="status" value="verified" />
-                        </ActionForm>
-                        <ActionForm
-                          action={reviewDocumentAction}
-                          submitLabel="Rechazar"
-                          className="space-y-1"
-                          submitClassName="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
-                        >
-                          <input type="hidden" name="documentId" value={document.id} />
-                          <input type="hidden" name="bookingId" value={bookingId} />
-                          <input type="hidden" name="status" value="rejected" />
-                          <input
-                            name="rejectionReason"
-                            placeholder="motivo"
-                            required
-                            className="w-full rounded border border-neutral-300 px-1 py-1"
-                          />
-                        </ActionForm>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-neutral-500">revisado</span>
-                    )}
-                  </td>
+          <TableWrap>
+            <table className={table}>
+              <thead>
+                <tr>
+                  <th className={th}>#</th>
+                  <th className={th}>Tipo</th>
+                  <th className={th}>Archivo</th>
+                  <th className={th}>Estado</th>
+                  <th className={th}>Revisar</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {documents.map((document) => (
+                  <tr key={document.id}>
+                    <td className={td}>{document.id}</td>
+                    <td className={td}>{tDocType(document.type)}</td>
+                    <td className={td}>
+                      <a href={document.fileUrl} className="text-accent hover:underline">
+                        ver
+                      </a>
+                    </td>
+                    <td className={td}>
+                      <Badge tone={documentStatusTone(document.status)}>{tDocStatus(document.status)}</Badge>
+                      {document.rejectionReason && (
+                        <span className="mt-1 block text-xs text-ink/50">{document.rejectionReason}</span>
+                      )}
+                    </td>
+                    <td className={td}>
+                      {document.status === "pending" ? (
+                        <div className="flex flex-wrap items-start gap-2">
+                          <ActionForm
+                            action={reviewDocumentAction}
+                            submitLabel="Verificar"
+                            className="shrink-0"
+                            submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-50"
+                          >
+                            <input type="hidden" name="documentId" value={document.id} />
+                            <input type="hidden" name="bookingId" value={bookingId} />
+                            <input type="hidden" name="status" value="verified" />
+                          </ActionForm>
+                          <ActionForm
+                            action={reviewDocumentAction}
+                            submitLabel="Rechazar"
+                            className="flex flex-wrap items-center gap-1"
+                            submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-red-300 hover:text-red-700 disabled:opacity-50"
+                          >
+                            <input type="hidden" name="documentId" value={document.id} />
+                            <input type="hidden" name="bookingId" value={bookingId} />
+                            <input type="hidden" name="status" value="rejected" />
+                            <input
+                              name="rejectionReason"
+                              placeholder="motivo"
+                              required
+                              className="w-32 rounded-sm border border-ink/15 px-1.5 py-1 text-xs"
+                            />
+                          </ActionForm>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-ink/45">revisado</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
         )}
 
         <ActionForm action={attachDocumentAction} submitLabel="Cargar documento">
           <input type="hidden" name="bookingId" value={bookingId} />
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <label className="space-y-1">
-              <span>Tipo</span>
-              <select name="type" className="w-full rounded border border-neutral-300 px-2 py-1">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className={labelClass}>
+              <span className="text-ink/70">Tipo</span>
+              <select name="type" className={fieldClass}>
                 {DOCUMENT_TYPES.map((type) => (
                   <option key={type} value={type}>
                     {tDocType(type)}
@@ -177,46 +189,45 @@ export default async function AdminBookingOpsPage({
                 ))}
               </select>
             </label>
-            <label className="space-y-1">
-              <span>Archivo</span>
-              <input type="file" name="file" accept={ACCEPT_ATTRIBUTE} required className="w-full" />
+            <label className={labelClass}>
+              <span className="text-ink/70">Archivo</span>
+              <input type="file" name="file" accept={ACCEPT_ATTRIBUTE} required className={fieldClass} />
             </label>
           </div>
         </ActionForm>
 
         {row.booking.status === "inquiry" && !gate.ok && gate.applies && (
-          <details className="rounded border border-amber-300 p-2">
-            <summary className="cursor-pointer text-sm text-amber-900">
+          <details className="rounded-md border border-amber-300 bg-amber-50/40 p-3">
+            <summary className="cursor-pointer text-sm font-medium text-amber-900">
               Confirmar sin verificación (override de administrador — queda registrado)
             </summary>
-            <ActionForm action={confirmWithDocumentOverrideAction} submitLabel="Confirmar igual">
-              <input type="hidden" name="bookingId" value={bookingId} />
-              <label className="block space-y-1 text-sm">
-                <span>Motivo</span>
-                <input name="reason" required minLength={5} className="w-full rounded border border-neutral-300 px-2 py-1" />
-              </label>
-            </ActionForm>
+            <div className="mt-3">
+              <ActionForm action={confirmWithDocumentOverrideAction} submitLabel="Confirmar igual">
+                <input type="hidden" name="bookingId" value={bookingId} />
+                <label className={labelClass}>
+                  <span className="text-ink/70">Motivo</span>
+                  <input name="reason" required minLength={5} className={fieldClass} />
+                </label>
+              </ActionForm>
+            </div>
           </details>
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Inspecciones (#5)</h2>
-        {inspections.length === 0 && (
-          <p className="text-sm text-neutral-500">Todavía no hay inspecciones.</p>
-        )}
+      <Section title="Inspecciones (#5)">
+        {inspections.length === 0 && <p className="text-sm text-ink/50">Todavía no hay inspecciones.</p>}
         {inspections.map(({ inspection, photos }) => (
-          <div key={inspection.id} className="rounded border border-neutral-200 p-3 text-sm">
-            <p className="font-medium">
+          <div key={inspection.id} className="rounded-md border border-ink/10 p-3 text-sm">
+            <p className="flex items-center gap-2 font-medium">
               {tInspection(inspection.type)} #{inspection.id}
-              {inspection.damageFlag && <span className="ml-2 text-red-600">daño</span>}
+              {inspection.damageFlag && <Badge tone="critical">daño</Badge>}
             </p>
-            <p className="text-neutral-600">
+            <p className="text-ink/60">
               odómetro: {inspection.odometer ?? "—"} · combustible: {inspection.fuelLevel ?? "—"}%
               {" · "}
               conformidad del huésped: {inspection.confirmedByGuest ? "sí" : "no"}
             </p>
-            {inspection.notes && <p>{inspection.notes}</p>}
+            {inspection.notes && <p className="mt-1">{inspection.notes}</p>}
             {photos.length > 0 && (
               <ul className="mt-2 grid grid-cols-4 gap-2">
                 {photos.map((photo) => (
@@ -225,18 +236,18 @@ export default async function AdminBookingOpsPage({
                     <img
                       src={photo.url}
                       alt={photo.caption ?? tInspection(inspection.type)}
-                      className="aspect-square w-full rounded object-cover"
+                      className="aspect-square w-full rounded-md object-cover"
                     />
                   </li>
                 ))}
               </ul>
             )}
-            <div className="mt-2 flex flex-wrap gap-3">
+            <div className="mt-3 flex flex-wrap gap-3">
               <ActionForm
                 action={uploadInspectionPhotoAction}
                 submitLabel="Subir foto"
-                className="space-y-1"
-                submitClassName="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
+                className="flex flex-wrap items-center gap-2"
+                submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-ink/40 disabled:opacity-50"
               >
                 <input type="hidden" name="inspectionId" value={inspection.id} />
                 <input type="hidden" name="bookingId" value={bookingId} />
@@ -246,8 +257,8 @@ export default async function AdminBookingOpsPage({
                 <ActionForm
                   action={confirmInspectionAction}
                   submitLabel="Registrar conformidad"
-                  className="space-y-1"
-                  submitClassName="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
+                  className="shrink-0"
+                  submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-ink/40 disabled:opacity-50"
                 >
                   <input type="hidden" name="inspectionId" value={inspection.id} />
                   <input type="hidden" name="bookingId" value={bookingId} />
@@ -258,160 +269,153 @@ export default async function AdminBookingOpsPage({
         ))}
 
         {missing.map((type) => (
-          <details key={type} className="rounded border border-neutral-200 p-2">
-            <summary className="cursor-pointer text-sm">
+          <details key={type} className="rounded-md border border-ink/10 p-3">
+            <summary className="cursor-pointer text-sm font-medium">
               Registrar inspección de {tInspection(type).toLowerCase()}
             </summary>
-            <ActionForm action={recordInspectionAction} submitLabel="Guardar inspección">
-              <input type="hidden" name="bookingId" value={bookingId} />
-              <input type="hidden" name="type" value={type} />
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <label className="space-y-1">
-                  <span>Odómetro</span>
-                  <input type="number" name="odometer" min={0} className="w-full rounded border border-neutral-300 px-2 py-1" />
+            <div className="mt-3">
+              <ActionForm action={recordInspectionAction} submitLabel="Guardar inspección">
+                <input type="hidden" name="bookingId" value={bookingId} />
+                <input type="hidden" name="type" value={type} />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className={labelClass}>
+                    <span className="text-ink/70">Odómetro</span>
+                    <input type="number" name="odometer" min={0} className={fieldClass} />
+                  </label>
+                  <label className={labelClass}>
+                    <span className="text-ink/70">Combustible %</span>
+                    <input type="number" name="fuelLevel" min={0} max={100} className={fieldClass} />
+                  </label>
+                </div>
+                <label className={labelClass}>
+                  <span className="text-ink/70">Notas</span>
+                  <textarea name="notes" rows={2} className={fieldClass} />
                 </label>
-                <label className="space-y-1">
-                  <span>Combustible %</span>
-                  <input type="number" name="fuelLevel" min={0} max={100} className="w-full rounded border border-neutral-300 px-2 py-1" />
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="damageFlag" className="h-4 w-4 accent-accent" />
+                  <span>Hay daño</span>
                 </label>
-              </div>
-              <label className="block space-y-1 text-sm">
-                <span>Notas</span>
-                <textarea name="notes" rows={2} className="w-full rounded border border-neutral-300 px-2 py-1" />
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="damageFlag" className="h-4 w-4" />
-                <span>Hay daño</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="confirmedByGuest" className="h-4 w-4" />
-                <span>El huésped firmó conformidad</span>
-              </label>
-              <fieldset className="space-y-1 rounded border border-neutral-200 p-2 text-sm">
-                <legend className="text-xs text-neutral-500">
-                  Sólo con daño: abre el ticket (#6) y deduce el depósito (#9) en la misma
-                  transacción
-                </legend>
-                <input name="ticketTitle" placeholder="título del ticket" className="w-full rounded border border-neutral-300 px-2 py-1" />
-                <input name="ticketCost" placeholder="costo estimado" inputMode="decimal" className="w-full rounded border border-neutral-300 px-2 py-1" />
-                <input name="deductionAmount" placeholder="monto a deducir del depósito" inputMode="decimal" className="w-full rounded border border-neutral-300 px-2 py-1" />
-                <input name="deductionReason" placeholder="motivo de la deducción" className="w-full rounded border border-neutral-300 px-2 py-1" />
-              </fieldset>
-            </ActionForm>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="confirmedByGuest" className="h-4 w-4 accent-accent" />
+                  <span>El huésped firmó conformidad</span>
+                </label>
+                <fieldset className="space-y-2 rounded-md border border-ink/10 p-3 text-sm">
+                  <legend className="px-1 text-xs text-ink/50">
+                    Sólo con daño: abre el ticket (#6) y deduce el depósito (#9) en la misma
+                    transacción
+                  </legend>
+                  <input name="ticketTitle" placeholder="título del ticket" className={fieldClass} />
+                  <input name="ticketCost" placeholder="costo estimado" inputMode="decimal" className={fieldClass} />
+                  <input name="deductionAmount" placeholder="monto a deducir del depósito" inputMode="decimal" className={fieldClass} />
+                  <input name="deductionReason" placeholder="motivo de la deducción" className={fieldClass} />
+                </fieldset>
+              </ActionForm>
+            </div>
           </details>
         ))}
-      </section>
+      </Section>
 
-      <section className="space-y-1">
-        <h2 className="font-medium">Depósito (#9)</h2>
+      <Section title="Depósito (#9)">
         {deposit ? (
           <p className="text-sm">
-            {formatMoney(deposit.amount, deposit.currency)} · {deposit.status}
+            <span className="font-medium">{formatMoney(deposit.amount, deposit.currency)}</span>{" "}
+            <Badge tone={depositStatusTone(deposit.status)}>{deposit.status}</Badge>
             {deposit.status !== "held" && (
-              <>
-                {" · "}deducido {formatMoney(deposit.deductionAmount ?? 0, deposit.currency)} ·
-                devuelto {formatMoney(refundedAmount(deposit), deposit.currency)}
-              </>
+              <span className="block text-ink/60">
+                deducido {formatMoney(deposit.deductionAmount ?? 0, deposit.currency)} · devuelto{" "}
+                {formatMoney(refundedAmount(deposit), deposit.currency)}
+              </span>
             )}
             {deposit.deductionReason && (
-              <span className="block text-xs text-neutral-500">{deposit.deductionReason}</span>
+              <span className="block text-xs text-ink/50">{deposit.deductionReason}</span>
             )}
             {deposit.inspectionId && (
-              <span className="block text-xs text-neutral-500">
+              <span className="block text-xs text-ink/50">
                 inspección #{deposit.inspectionId}
                 {deposit.maintenanceTicketId ? ` · ticket #${deposit.maintenanceTicketId}` : ""}
               </span>
             )}
           </p>
         ) : (
-          <p className="text-sm text-neutral-500">Esta reserva no tiene depósito registrado.</p>
+          <p className="text-sm text-ink/50">Esta reserva no tiene depósito registrado.</p>
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Links de pago (#8)</h2>
-        <p className="text-sm text-neutral-600">
-          Cobrado hasta ahora: {formatMoney(paidTotal(payments), row.booking.currency)} de{" "}
-          {formatMoney(row.booking.total, row.booking.currency)}
-        </p>
+      <Section
+        title="Links de pago (#8)"
+        description={`Cobrado hasta ahora: ${formatMoney(paidTotal(payments), row.booking.currency)} de ${formatMoney(row.booking.total, row.booking.currency)}`}
+      >
         {payments.length > 0 && (
-          <ul className="text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {payments.map((link) => (
-              <li key={link.id} className="flex flex-wrap items-center gap-2 border-b py-1">
+              <li key={link.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span>
-                  {link.provider} · {formatMoney(link.amount, link.currency)} · {link.status}
+                  {link.provider} · {formatMoney(link.amount, link.currency)} ·{" "}
+                  <Badge tone={paymentStatusTone(link.status)}>{link.status}</Badge>
                   {link.expiresAt ? ` · vence ${link.expiresAt.toISOString().slice(0, 10)}` : ""}
                 </span>
-                {link.url && (
-                  <a href={link.url} rel="noopener" className="text-blue-700 underline">
-                    abrir
-                  </a>
-                )}
-                {link.status === "pending" && (
-                  <ActionForm
-                    action={markPaymentLinkPaidFormAction}
-                    submitLabel="Marcar pagado"
-                    className="inline"
-                    submitClassName="rounded border px-2 py-0.5 text-xs disabled:opacity-50"
-                  >
-                    <input type="hidden" name="paymentLinkId" value={link.id} />
-                  </ActionForm>
-                )}
+                <span className="flex items-center gap-2">
+                  {link.url && (
+                    <a href={link.url} rel="noopener" className="text-accent hover:underline">
+                      abrir
+                    </a>
+                  )}
+                  {link.status === "pending" && (
+                    <ActionForm
+                      action={markPaymentLinkPaidFormAction}
+                      submitLabel="Marcar pagado"
+                      className="inline"
+                      submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-50"
+                    >
+                      <input type="hidden" name="paymentLinkId" value={link.id} />
+                    </ActionForm>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
         )}
         <ActionForm action={createPaymentLinkFormAction} submitLabel="Registrar link">
           <input type="hidden" name="bookingId" value={bookingId} />
-          <div className="flex flex-wrap gap-2 text-sm">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <input
               name="provider"
               required
               placeholder="Bancard / transferencia"
-              className="rounded border border-neutral-300 px-2 py-1"
+              className={fieldClass}
             />
             <input
               name="amount"
               required
               inputMode="decimal"
               placeholder="monto"
-              className="w-32 rounded border border-neutral-300 px-2 py-1"
+              className={fieldClass}
             />
-            <input
-              name="url"
-              placeholder="https://... (opcional)"
-              className="rounded border border-neutral-300 px-2 py-1"
-            />
-            <input
-              name="reference"
-              placeholder="referencia (opcional)"
-              className="rounded border border-neutral-300 px-2 py-1"
-            />
-            <input
-              type="datetime-local"
-              name="expiresAt"
-              className="rounded border border-neutral-300 px-2 py-1"
-            />
+            <input name="url" placeholder="https://... (opcional)" className={fieldClass} />
+            <input name="reference" placeholder="referencia (opcional)" className={fieldClass} />
+            <input type="datetime-local" name="expiresAt" className={fieldClass} />
           </div>
-          <p className="text-xs text-neutral-500">
-            v1 no integra la pasarela: se guarda el link y su estado, y se marca pagado a
-            mano. Las fechas se interpretan en UTC.
+          <p className="text-xs text-ink/50">
+            v1 no integra la pasarela: se guarda el link y su estado, y se marca pagado a mano.
+            Las fechas se interpretan en UTC.
           </p>
         </ActionForm>
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Mensajes (#4)</h2>
+      <Section title="Mensajes (#4)">
         {queued.length === 0 ? (
-          <p className="text-sm text-neutral-600">
+          <EmptyState>
             Esta reserva todavía no tiene mensajes agendados. Se agendan al confirmarla.
-          </p>
+          </EmptyState>
         ) : (
-          <ul className="text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {queued.map((message) => (
-              <li key={message.id} className="border-b py-1">
-                {message.sendAfter.toISOString().slice(0, 16).replace("T", " ")} ·{" "}
-                {message.label ?? message.templateKey} · {message.status}
+              <li key={message.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span>
+                  {message.sendAfter.toISOString().slice(0, 16).replace("T", " ")} ·{" "}
+                  {message.label ?? message.templateKey}
+                </span>
+                <Badge tone={messageStatusTone(message.status)}>{message.status}</Badge>
               </li>
             ))}
           </ul>
@@ -419,25 +423,22 @@ export default async function AdminBookingOpsPage({
         <ActionForm
           action={enqueueForBookingAction}
           submitLabel="Reagendar la secuencia"
-          submitClassName="rounded border px-3 py-1 text-sm disabled:opacity-50"
+          submitClassName="rounded-sm border border-ink/20 px-3 py-1.5 text-sm hover:border-ink/40 disabled:opacity-50"
         >
           <input type="hidden" name="bookingId" value={bookingId} />
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-ink/50">
             Completa lo que falte; nunca duplica lo que ya está agendado.
           </p>
         </ActionForm>
         {thread.length > 0 && (
           <p className="text-sm">
             {thread.length} mensaje(s) registrados en la conversación —{" "}
-            <a
-              href={`/admin/inbox?hilo=booking:${bookingId}`}
-              className="text-blue-700 underline"
-            >
-              abrir en la bandeja
+            <a href={`/admin/inbox?hilo=booking:${bookingId}`} className="font-medium text-accent hover:underline">
+              abrir en la bandeja →
             </a>
           </p>
         )}
-      </section>
-    </section>
+      </Section>
+    </div>
   );
 }

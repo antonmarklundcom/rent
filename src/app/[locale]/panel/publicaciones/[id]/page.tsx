@@ -1,6 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { ActionForm } from "@/components/action-form";
+import { Badge, listingStatusTone } from "@/components/ui/badge";
+import { fieldClass, labelClass } from "@/components/ui/field";
+import { EmptyState, PageHeader, Section } from "@/components/ui/page-header";
 import { deleteInfoItemAction, saveInfoItemAction } from "@/app/actions/comms";
 import {
   createIcalSourceAction,
@@ -12,6 +15,12 @@ import { getPanelListing } from "@/db/queries/panel";
 import { listInfoItems } from "@/db/queries/messages";
 import { CANCELLATION_POLICIES, LISTING_STATUSES } from "@/db/schema";
 import { getSessionUser } from "@/lib/session";
+
+const CANCELLATION_LABEL: Record<string, string> = {
+  flexible: "Flexible",
+  moderate: "Moderada",
+  strict: "Estricta",
+};
 
 /**
  * Owner listing editor + info base (plan §5.O10).
@@ -41,43 +50,49 @@ export default async function PanelListingPage({
   ]);
 
   return (
-    <section className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">{row.listing.title}</h1>
-        <p className="text-sm text-neutral-600">
-          {row.listing.vertical} · {row.locationName ?? "sin ubicación"} · estado{" "}
-          {row.listing.status}
-        </p>
-        <Link href="/panel" className="text-sm text-blue-700 underline">
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <Link href="/panel" className="text-sm text-ink/55 hover:text-accent">
           ← Volver al panel
         </Link>
-      </header>
+        <PageHeader
+          title={row.listing.title}
+          subtitle={
+            <span className="flex flex-wrap items-center gap-2">
+              {row.listing.vertical === "stay" ? "Alojamiento" : "Auto"} ·{" "}
+              {row.locationName ?? "sin ubicación"}
+              <Badge tone={listingStatusTone(row.listing.status)}>{row.listing.status}</Badge>
+            </span>
+          }
+        />
+      </div>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Datos de la publicación</h2>
+      <Section title="Datos de la publicación">
         <ActionForm action={updateListingAction} submitLabel="Guardar">
           <input type="hidden" name="listingId" value={listingId} />
-          <label className="flex flex-col text-sm">
-            Título
-            <input name="title" defaultValue={row.listing.title} className="border p-1" />
+          <label className={labelClass}>
+            <span className="text-ink/70">Título</span>
+            <input name="title" defaultValue={row.listing.title} className={fieldClass} />
           </label>
-          <label className="flex flex-col text-sm">
-            Descripción
+          <label className={labelClass}>
+            <span className="text-ink/70">Descripción</span>
             <textarea
               name="description"
               rows={5}
               defaultValue={row.listing.description ?? ""}
-              className="border p-1"
+              className={fieldClass}
             />
           </label>
-          <div className="flex flex-wrap gap-3 text-sm">
-            <label className="flex flex-col">
-              Precio ({row.listing.currency} / {row.listing.priceUnit})
-              <input name="price" defaultValue={row.listing.price} className="border p-1" />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className={labelClass}>
+              <span className="text-ink/70">
+                Precio ({row.listing.currency} / {row.listing.priceUnit})
+              </span>
+              <input name="price" defaultValue={row.listing.price} className={fieldClass} />
             </label>
-            <label className="flex flex-col">
-              Estado
-              <select name="status" defaultValue={row.listing.status} className="border p-1">
+            <label className={labelClass}>
+              <span className="text-ink/70">Estado</span>
+              <select name="status" defaultValue={row.listing.status} className={fieldClass}>
                 {LISTING_STATUSES.map((status) => (
                   <option key={status} value={status}>
                     {status}
@@ -85,44 +100,44 @@ export default async function PanelListingPage({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col">
-              Política de cancelación
+            <label className={labelClass}>
+              <span className="text-ink/70">Política de cancelación</span>
               <select
                 name="cancellationPolicy"
                 defaultValue={row.listing.cancellationPolicy}
-                className="border p-1"
+                className={fieldClass}
               >
                 {CANCELLATION_POLICIES.map((policy) => (
                   <option key={policy} value={policy}>
-                    {policy}
+                    {CANCELLATION_LABEL[policy] ?? policy}
                   </option>
                 ))}
               </select>
             </label>
           </div>
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-ink/50">
             La comisión, el slug y la vertical las cambia un administrador.
           </p>
         </ActionForm>
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Base de información</h2>
-        <p className="text-sm text-neutral-600">
-          Lo que cargues acá es lo único que el borrador automático puede responderle a un
-          huésped. Si no está acá, no lo inventa: dice que lo consulta.
-        </p>
+      <Section
+        title="Base de información"
+        description="Lo que cargues acá es lo único que el borrador automático puede responderle a un huésped. Si no está acá, no lo inventa: dice que lo consulta."
+      >
         {info.length > 0 && (
-          <ul className="space-y-2 text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {info.map((item) => (
-              <li key={item.id} className="border-b pb-2">
-                <p className="font-medium">{item.question}</p>
-                <p className="text-neutral-700">{item.answer}</p>
+              <li key={item.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                <div>
+                  <p className="font-medium">{item.question}</p>
+                  <p className="text-ink/70">{item.answer}</p>
+                </div>
                 <ActionForm
                   action={deleteInfoItemAction}
                   submitLabel="Eliminar"
-                  className="inline"
-                  submitClassName="rounded border px-2 py-0.5 text-xs disabled:opacity-50"
+                  className="shrink-0"
+                  submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-red-300 hover:text-red-700 disabled:opacity-50"
                 >
                   <input type="hidden" name="listingId" value={listingId} />
                   <input type="hidden" name="infoItemId" value={item.id} />
@@ -133,34 +148,31 @@ export default async function PanelListingPage({
         )}
         <ActionForm action={saveInfoItemAction} submitLabel="Guardar ítem">
           <input type="hidden" name="listingId" value={listingId} />
-          <label className="flex flex-col text-sm">
-            Pregunta
+          <label className={labelClass}>
+            <span className="text-ink/70">Pregunta</span>
             <input
               name="question"
               required
               placeholder="¿A qué hora es el check-in?"
-              className="border p-1"
+              className={fieldClass}
             />
           </label>
-          <label className="flex flex-col text-sm">
-            Respuesta
-            <textarea name="answer" rows={3} required className="border p-1" />
+          <label className={labelClass}>
+            <span className="text-ink/70">Respuesta</span>
+            <textarea name="answer" rows={3} required className={fieldClass} />
           </label>
-          <p className="text-xs text-neutral-500">
-            Guardar la misma pregunta actualiza la respuesta.
-          </p>
+          <p className="text-xs text-ink/50">Guardar la misma pregunta actualiza la respuesta.</p>
         </ActionForm>
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Calendarios (#2)</h2>
+      <Section title="Calendarios (#2)">
         {row.listing.icalExportToken && (
-          <div className="space-y-1">
+          <div className="space-y-1 rounded-md border border-ink/10 bg-ink/[0.02] p-3">
             <p className="text-sm font-medium">Para exportar</p>
-            <code className="block break-all text-xs">
+            <code className="block break-all text-xs text-ink/70">
               /api/ical/{row.listing.icalExportToken}.ics
             </code>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-ink/50">
               Pegá esta URL en Airbnb o Booking para que vean tus fechas ocupadas.
             </p>
           </div>
@@ -168,26 +180,25 @@ export default async function PanelListingPage({
 
         <p className="text-sm font-medium">Para importar</p>
         {icalSources.length === 0 ? (
-          <p className="text-sm text-neutral-600">
-            No hay calendarios externos conectados.
-          </p>
+          <EmptyState>No hay calendarios externos conectados.</EmptyState>
         ) : (
-          <ul className="text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {icalSources.map((source) => (
-              <li key={source.id} className="flex flex-wrap items-center gap-2 border-b py-1">
-                <span className="break-all">
-                  {source.label ?? "Sin nombre"} — {source.url}
-                </span>
-                <span className="text-xs text-neutral-500">
-                  {source.lastSyncedAt
-                    ? `última sincronización ${source.lastSyncedAt.toISOString().slice(0, 16)} (${source.lastStatus ?? "?"})`
-                    : "todavía sin sincronizar"}
+              <li key={source.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="min-w-0">
+                  <span className="font-medium">{source.label ?? "Sin nombre"}</span>
+                  <span className="block break-all text-xs text-ink/50">{source.url}</span>
+                  <span className="block text-xs text-ink/50">
+                    {source.lastSyncedAt
+                      ? `última sincronización ${source.lastSyncedAt.toISOString().slice(0, 16)} (${source.lastStatus ?? "?"})`
+                      : "todavía sin sincronizar"}
+                  </span>
                 </span>
                 <ActionForm
                   action={deleteIcalSourceAction}
                   submitLabel="Desconectar"
-                  className="inline"
-                  submitClassName="rounded border px-2 py-0.5 text-xs disabled:opacity-50"
+                  className="shrink-0"
+                  submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-red-300 hover:text-red-700 disabled:opacity-50"
                 >
                   <input type="hidden" name="sourceId" value={source.id} />
                 </ActionForm>
@@ -197,25 +208,25 @@ export default async function PanelListingPage({
         )}
         <ActionForm action={createIcalSourceAction} submitLabel="Conectar calendario">
           <input type="hidden" name="listingId" value={listingId} />
-          <label className="flex flex-col text-sm">
-            URL del calendario (Airbnb, Booking, Google)
+          <label className={labelClass}>
+            <span className="text-ink/70">URL del calendario (Airbnb, Booking, Google)</span>
             <input
               name="url"
               required
               placeholder="https://www.airbnb.com/calendar/ical/....ics"
-              className="border p-1"
+              className={fieldClass}
             />
           </label>
-          <label className="flex flex-col text-sm">
-            Nombre (opcional)
-            <input name="label" placeholder="Airbnb" className="border p-1" />
+          <label className={labelClass}>
+            <span className="text-ink/70">Nombre (opcional)</span>
+            <input name="label" placeholder="Airbnb" className={fieldClass} />
           </label>
-          <p className="text-xs text-neutral-500">
-            Las fechas ocupadas se importan en la próxima sincronización horaria y
-            bloquean el calendario acá.
+          <p className="text-xs text-ink/50">
+            Las fechas ocupadas se importan en la próxima sincronización horaria y bloquean el
+            calendario acá.
           </p>
         </ActionForm>
-      </section>
-    </section>
+      </Section>
+    </div>
   );
 }

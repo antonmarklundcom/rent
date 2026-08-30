@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { BookingRequestForm } from "@/components/booking-request-form";
 import { Gallery } from "@/components/gallery";
+import { JsonLd } from "@/components/json-ld";
 import { WhatsAppCta } from "@/components/whatsapp-cta";
 import { listOccupiedRanges } from "@/db/queries/availability";
 import { listExtrasForListing } from "@/db/queries/extras";
@@ -12,6 +13,7 @@ import { listInfoItems } from "@/db/queries/messages";
 import { MS_PER_DAY } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { normalisePhone } from "@/lib/messaging";
+import { absoluteLocaleUrl, absoluteUrl, bilingualAlternates, buildCarJsonLd, buildStayJsonLd } from "@/lib/seo";
 
 /**
  * Public listing detail (plan §5.O11 → §6.S2 restyle): gallery, typed key
@@ -35,12 +37,24 @@ export async function generateMetadata({
 }: {
   params: Promise<{ locale: string; slug: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
+  const { locale, slug } = await params;
   const listing = await getPublicListing(slug);
   if (!listing) return {};
+  const title = listing.listing.title;
+  const description = listing.listing.description?.slice(0, 160);
   return {
-    title: listing.listing.title,
-    description: listing.listing.description?.slice(0, 160),
+    title,
+    description,
+    alternates: bilingualAlternates(locale, `/publicacion/${slug}`),
+    // No explicit `openGraph.images`/`twitter.images` here: setting one
+    // overrides the file-convention `opengraph-image.tsx` in this same
+    // segment (confirmed live — an explicit array wins over the generated
+    // image), and that branded placeholder is a real, always-valid image;
+    // `listing_images` still only holds `/images/placeholder-*.jpg`
+    // (KNOWN-ISSUES, S-4 imagery not fetched), which is a broken link in a
+    // raw `og:image` tag even though `SafeImage` hides it in-page.
+    openGraph: { title, description, type: "website" },
+    twitter: { card: "summary_large_image", title, description },
   };
 }
 
@@ -93,8 +107,41 @@ export default async function ListingDetailPage({
       )}`
     : null;
 
+  const canonicalUrl = absoluteLocaleUrl(locale, `/publicacion/${slug}`);
+  const jsonLdImages = listing.images.map((image) => absoluteUrl(image.url));
+  const jsonLd = isStay
+    ? buildStayJsonLd({
+        url: canonicalUrl,
+        name: listing.listing.title,
+        description: listing.listing.description,
+        images: jsonLdImages,
+        locationName: listing.locationName,
+        propertyType: listing.stay?.propertyType,
+        bedrooms: listing.stay?.bedrooms,
+        bathrooms: listing.stay?.bathrooms,
+        maxGuests: listing.stay?.maxGuests,
+        areaM2: listing.stay?.areaM2,
+        price: listing.listing.price,
+        currency: listing.listing.currency,
+      })
+    : buildCarJsonLd({
+        url: canonicalUrl,
+        name: listing.listing.title,
+        description: listing.listing.description,
+        images: jsonLdImages,
+        make: listing.carMake,
+        model: listing.carModel,
+        year: listing.carYear,
+        transmission: listing.carTransmission,
+        fuel: listing.carFuel,
+        seats: listing.carSeats,
+        price: listing.listing.price,
+        currency: listing.listing.currency,
+      });
+
   return (
     <article className="section pt-8">
+      <JsonLd data={jsonLd} />
       <div className="wrap space-y-8">
         <nav className="text-sm text-ink/50">
           <Link href={isStay ? "/alojamientos" : "/autos"} className="hover:text-accent">

@@ -1,13 +1,37 @@
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { BrowseFilters } from "@/components/browse-filters";
+import { JsonLd } from "@/components/json-ld";
 import { ListingCard } from "@/components/listing-card";
 import { browseListings, browseLocations } from "@/db/queries/listings";
 import { PROPERTY_TYPES, type PropertyType } from "@/db/schema";
+import { absoluteLocaleUrl, bilingualAlternates, buildItemListJsonLd } from "@/lib/seo";
 
 /**
  * Browse alojamientos (plan §5.O11 → §6.S2 restyle). Filters are GET params so
- * every filtered view is a real URL — S-2 (§6.S5) adds canonicals.
+ * every filtered view is a real URL.
+ *
+ * Canonical is always the bare `/alojamientos` regardless of which filters
+ * are applied (plan §6.S5 point 7) — the filter combinations are not meant
+ * to be indexed as separate pages; the location landing pages are the
+ * indexable, location-specific URLs.
  */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: "es" | "en" }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "browse" });
+  return {
+    title: t("stayMetaTitle"),
+    description: t("stayMetaDescription"),
+    alternates: bilingualAlternates(locale, "/alojamientos"),
+    openGraph: { title: t("stayMetaTitle"), description: t("stayMetaDescription"), type: "website" },
+    twitter: { card: "summary_large_image", title: t("stayMetaTitle"), description: t("stayMetaDescription") },
+  };
+}
+
 export default async function BrowseStaysPage({
   params,
   searchParams,
@@ -46,6 +70,13 @@ export default async function BrowseStaysPage({
 
   return (
     <section className="section pt-10">
+      {rows.length > 0 && (
+        <JsonLd
+          data={buildItemListJsonLd(
+            rows.map((row) => ({ name: row.title, url: absoluteLocaleUrl(locale, `/publicacion/${row.slug}`) })),
+          )}
+        />
+      )}
       <div className="wrap space-y-6">
         <div>
           <span className="eyebrow">{t("stayEyebrow")}</span>

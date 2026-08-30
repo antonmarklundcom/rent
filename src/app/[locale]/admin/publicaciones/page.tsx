@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { ActionForm } from "@/components/action-form";
+import { PageHeader, Section, TableWrap, EmptyState, table, th, td } from "@/components/ui/page-header";
 import { updateListingAction } from "@/app/actions/panel";
 import { listPanelListings } from "@/db/queries/panel";
 import { LISTING_STATUSES } from "@/db/schema";
@@ -16,63 +17,70 @@ export default async function AdminListingsPage() {
   const listings = await listPanelListings(user);
 
   return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Publicaciones</h1>
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b">
-            <th className="py-1">Título</th>
-            <th>Vertical</th>
-            <th>Ubicación</th>
-            <th>Precio</th>
-            <th>Fotos</th>
-            <th>Estado</th>
-            <th>Público</th>
-          </tr>
-        </thead>
-        <tbody>
-          {listings.map((row) => (
-            <tr key={row.id} className="border-b align-top">
-              <td className="py-1">
-                <Link href={`/panel/publicaciones/${row.id}`} className="text-blue-700 underline">
-                  {row.title}
-                </Link>
-              </td>
-              <td>{row.vertical}</td>
-              <td>{row.locationName ?? "—"}</td>
-              <td>{formatMoney(row.price, row.currency)}</td>
-              <td>{row.imageCount}</td>
-              <td>
-                <ActionForm
-                  action={updateListingAction}
-                  submitLabel="Cambiar"
-                  className="flex items-center gap-1"
-                  submitClassName="rounded border px-2 py-0.5 text-xs disabled:opacity-50"
-                >
-                  <input type="hidden" name="listingId" value={row.id} />
-                  <select name="status" defaultValue={row.status} className="border p-0.5 text-xs">
-                    {LISTING_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </select>
-                </ActionForm>
-              </td>
-              <td>
-                {row.status === "published" ? (
-                  <Link href={`/publicacion/${row.slug}`} className="text-blue-700 underline">
-                    ver
-                  </Link>
-                ) : (
-                  "—"
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {listings.length === 0 && <p className="text-sm text-neutral-600">Sin publicaciones.</p>}
-    </section>
+    <div className="space-y-4">
+      <PageHeader title="Publicaciones" />
+      <Section>
+        {listings.length === 0 ? (
+          <EmptyState>Sin publicaciones.</EmptyState>
+        ) : (
+          <TableWrap>
+            <table className={table}>
+              <thead>
+                <tr>
+                  <th className={th}>Título</th>
+                  <th className={th}>Vertical</th>
+                  <th className={th}>Ubicación</th>
+                  <th className={th}>Precio</th>
+                  <th className={th}>Fotos</th>
+                  <th className={th}>Estado</th>
+                  <th className={th}>Público</th>
+                </tr>
+              </thead>
+              <tbody>
+                {listings.map((row) => (
+                  <tr key={row.id}>
+                    <td className={`${td} font-medium`}>
+                      <Link href={`/panel/publicaciones/${row.id}`} className="text-accent hover:underline">
+                        {row.title}
+                      </Link>
+                    </td>
+                    <td className={td}>{row.vertical === "stay" ? "Alojamiento" : "Auto"}</td>
+                    <td className={td}>{row.locationName ?? "—"}</td>
+                    <td className={`${td} tabular-nums`}>{formatMoney(row.price, row.currency)}</td>
+                    <td className={td}>{row.imageCount}</td>
+                    <td className={td}>
+                      <ActionForm
+                        action={updateListingAction}
+                        submitLabel="Cambiar"
+                        className="flex items-center gap-1"
+                        submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-ink/40 disabled:opacity-50"
+                      >
+                        <input type="hidden" name="listingId" value={row.id} />
+                        <select name="status" defaultValue={row.status} className="rounded-sm border border-ink/15 px-1 py-1 text-xs">
+                          {LISTING_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </ActionForm>
+                    </td>
+                    <td className={td}>
+                      {row.status === "published" ? (
+                        <Link href={`/publicacion/${row.slug}`} className="text-accent hover:underline">
+                          ver
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+      </Section>
+    </div>
   );
 }

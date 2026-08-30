@@ -1,14 +1,49 @@
 import { Link } from "@/i18n/navigation";
+import { CATEGORICAL, STATUS_COLOR, BarList, StackedBar } from "@/components/ui/charts";
+import { Meter, StatRow, StatTile } from "@/components/ui/stat-tile";
+import { PageHeader, Section, TableWrap, table, th, td } from "@/components/ui/page-header";
 import { analyticsOverview, idleVehicles, trailingWindow } from "@/db/queries/analytics";
 import { formatMoney } from "@/lib/money";
 import { requireAdminPage } from "@/lib/page-guards";
 
 /**
- * Business analytics (plan §5.O10, feature #12) — data layer + minimal page.
- * Sonnet designs the charts in §6.S3 with the `dataviz` skill; this screen
- * exists so every number is proven reachable before any of it is styled.
+ * Business analytics (plan §5.O10, feature #12), styled per the `dataviz`
+ * skill: stat tiles for the headline numbers, meters for occupancy (a ratio
+ * against 100%), horizontal bar lists / a stacked bar for the breakdowns —
+ * `analyticsOverview` already computes every number; this page only chooses
+ * a form and a color for each one.
  */
 const RANGES = [30, 90, 180, 365];
+
+const STATUS_LABEL: Record<string, string> = {
+  inquiry: "Consulta",
+  confirmed: "Confirmada",
+  active: "En curso",
+  completed: "Completada",
+  cancelled: "Cancelada",
+};
+
+const STATUS_TONE: Record<string, string> = {
+  inquiry: STATUS_COLOR.neutral,
+  confirmed: STATUS_COLOR.warning,
+  active: "#2a78d6",
+  completed: STATUS_COLOR.good,
+  cancelled: STATUS_COLOR.critical,
+};
+
+const CATEGORY_LABEL: Record<string, string> = {
+  cleaning: "Limpieza",
+  supplies: "Insumos",
+  repair: "Reparación",
+  fuel: "Combustible",
+  other: "Otro",
+};
+
+const SOURCE_LABEL: Record<string, string> = {
+  web: "Web",
+  whatsapp: "WhatsApp",
+  manual: "Manual",
+};
 
 function pct(value: number | null): string {
   return value === null ? "—" : `${value.toFixed(1)}%`;
@@ -31,157 +66,179 @@ export default async function AdminAnalyticsPage({
   ]);
 
   return (
-    <section className="space-y-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Analítica</h1>
-        <p className="text-sm text-neutral-600">
-          Últimos {days} días ({window.startAt.toISOString().slice(0, 10)} →{" "}
-          {window.endAt.toISOString().slice(0, 10)})
-        </p>
-        <p className="text-sm">
-          {RANGES.map((range) => (
-            <a
-              key={range}
-              href={`?dias=${range}`}
-              className={`mr-3 underline ${range === days ? "font-semibold" : "text-blue-700"}`}
-            >
-              {range} días
-            </a>
-          ))}
-        </p>
-      </header>
+    <div className="space-y-8">
+      <PageHeader
+        title="Analítica"
+        subtitle={`${window.startAt.toISOString().slice(0, 10)} → ${window.endAt.toISOString().slice(0, 10)}`}
+        actions={
+          <div className="flex gap-1 rounded-md border border-ink/10 p-1">
+            {RANGES.map((range) => (
+              <a
+                key={range}
+                href={`?dias=${range}`}
+                className={`rounded-sm px-3 py-1.5 text-sm ${
+                  range === days ? "bg-ink text-base font-medium" : "text-ink/60 hover:bg-ink/[0.06]"
+                }`}
+              >
+                {range}d
+              </a>
+            ))}
+          </div>
+        }
+      />
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Cartera</h2>
-        <ul className="list-disc pl-5 text-sm">
-          <li>Publicaciones: {overview.portfolio.listings}</li>
-          <li>Reservas que ocupan calendario: {overview.portfolio.bookings}</li>
-          <li>Facturación: {formatMoney(overview.portfolio.revenue)}</li>
-          <li>Comisión: {formatMoney(overview.portfolio.commission)}</li>
-          <li>Gastos: {formatMoney(overview.portfolio.expenses)}</li>
-          <li>Ocupación promedio: {pct(overview.portfolio.occupancyPct)}</li>
-          <li>Ratio de gastos: {pct(overview.portfolio.expenseRatioPct)}</li>
-        </ul>
-      </section>
-
-      <section className="grid gap-6 md:grid-cols-2">
-        <div>
-          <h2 className="font-medium">Alojamientos</h2>
-          <ul className="list-disc pl-5 text-sm">
-            <li>Publicaciones: {overview.stays.listings}</li>
-            <li>Ocupación: {pct(overview.stays.occupancyPct)}</li>
-            <li>Facturación: {formatMoney(overview.stays.revenue)}</li>
-          </ul>
+      <Section title="Cartera">
+        <StatRow>
+          <StatTile label="Publicaciones" value={overview.portfolio.listings} />
+          <StatTile label="Reservas" value={overview.portfolio.bookings} />
+          <StatTile label="Facturación" value={formatMoney(overview.portfolio.revenue)} />
+          <StatTile label="Comisión" value={formatMoney(overview.portfolio.commission)} />
+          <StatTile label="Gastos" value={formatMoney(overview.portfolio.expenses)} />
+        </StatRow>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Meter label="Ocupación promedio" pct={overview.portfolio.occupancyPct} />
+          <Meter
+            label="Ratio de gastos sobre facturación"
+            pct={overview.portfolio.expenseRatioPct}
+            color={STATUS_COLOR.serious}
+            track="#fbe4da"
+          />
         </div>
-        <div>
-          <h2 className="font-medium">Flota (#12)</h2>
-          <ul className="list-disc pl-5 text-sm">
-            <li>Vehículos: {overview.fleet.vehicles}</li>
-            <li>Utilización: {pct(overview.fleet.occupancyPct)}</li>
-            <li>Facturación: {formatMoney(overview.fleet.revenue)}</li>
-            <li>Sin reservas en el período: {idle.length}</li>
-          </ul>
-        </div>
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Por publicación</h2>
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b">
-              <th className="py-1">Publicación</th>
-              <th>Ubicación</th>
-              <th>Ocup.</th>
-              <th>Reservas</th>
-              <th>Facturación</th>
-              <th>Gastos</th>
-              <th>Ratio</th>
-            </tr>
-          </thead>
-          <tbody>
-            {overview.perListing.map((row) => (
-              <tr key={row.listingId} className="border-b">
-                <td className="py-1">
-                  <Link
-                    href={`/admin/publicaciones?id=${row.listingId}`}
-                    className="text-blue-700 underline"
-                  >
-                    {row.title}
-                  </Link>
-                </td>
-                <td>{row.locationName ?? "—"}</td>
-                <td>{pct(row.occupancyPct)}</td>
-                <td>{row.bookingCount}</td>
-                <td>{formatMoney(row.revenue)}</td>
-                <td>{formatMoney(row.expenses)}</td>
-                <td>{pct(row.expenseRatioPct)}</td>
+      <div className="grid gap-6 2xl:grid-cols-2">
+        <Section eyebrow="Vertical" title="Alojamientos">
+          <StatRow>
+            <StatTile label="Publicaciones" value={overview.stays.listings} />
+            <StatTile label="Facturación" value={formatMoney(overview.stays.revenue)} />
+          </StatRow>
+          <Meter label="Ocupación" pct={overview.stays.occupancyPct} />
+        </Section>
+        <Section eyebrow="Vertical · #12" title="Flota">
+          <StatRow>
+            <StatTile label="Vehículos" value={overview.fleet.vehicles} />
+            <StatTile label="Facturación" value={formatMoney(overview.fleet.revenue)} />
+            <StatTile label="Sin reservas" value={idle.length} hint="en el período" />
+          </StatRow>
+          <Meter
+            label="Utilización"
+            pct={overview.fleet.occupancyPct}
+            color={CATEGORICAL[2]}
+            track="#c7ecdd"
+          />
+        </Section>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Section title="Top ubicaciones" description="Por facturación en el período.">
+          <BarList
+            items={overview.topLocations.map((row) => ({
+              label: row.locationName,
+              value: Number(row.revenue),
+              valueLabel: formatMoney(row.revenue),
+            }))}
+          />
+        </Section>
+        <Section title="Origen de las reservas">
+          <BarList
+            items={overview.sources.map((row, i) => ({
+              label: `${SOURCE_LABEL[row.source] ?? row.source} (${row.sharePct.toFixed(0)}%)`,
+              value: row.bookings,
+              valueLabel: `${row.bookings} · ${formatMoney(row.revenue)}`,
+              color: CATEGORICAL[i % CATEGORICAL.length],
+            }))}
+          />
+        </Section>
+        <Section title="Gastos por categoría">
+          <StackedBar
+            segments={overview.expenses.map((row, i) => ({
+              label: CATEGORY_LABEL[row.category] ?? row.category,
+              value: Number(row.total),
+              valueLabel: formatMoney(row.total),
+              color: CATEGORICAL[i % CATEGORICAL.length],
+            }))}
+          />
+        </Section>
+      </div>
+
+      <Section title="Estados de reserva" description="Incluye consultas que nunca se confirmaron.">
+        <StackedBar
+          segments={overview.statuses.map((row) => ({
+            label: STATUS_LABEL[row.status] ?? row.status,
+            value: row.count,
+            valueLabel: String(row.count),
+            color: STATUS_TONE[row.status] ?? STATUS_COLOR.neutral,
+          }))}
+        />
+      </Section>
+
+      <Section title="Por publicación" description="Ocupación, facturación y gastos en el período.">
+        <TableWrap>
+          <table className={table}>
+            <thead>
+              <tr>
+                <th className={th}>Publicación</th>
+                <th className={th}>Ubicación</th>
+                <th className={th}>Ocup.</th>
+                <th className={th}>Reservas</th>
+                <th className={th}>Facturación</th>
+                <th className={th}>Gastos</th>
+                <th className={th}>Ratio</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="grid gap-6 md:grid-cols-3">
-        <div>
-          <h2 className="font-medium">Top ubicaciones</h2>
-          <ul className="list-disc pl-5 text-sm">
-            {overview.topLocations.map((row) => (
-              <li key={`${row.locationId}-${row.locationName}`}>
-                {row.locationName}: {formatMoney(row.revenue)} ({row.bookings} reservas)
-              </li>
-            ))}
-            {overview.topLocations.length === 0 && <li className="text-neutral-600">—</li>}
-          </ul>
-        </div>
-        <div>
-          <h2 className="font-medium">Origen de las reservas</h2>
-          <ul className="list-disc pl-5 text-sm">
-            {overview.sources.map((row) => (
-              <li key={row.source}>
-                {row.source}: {row.bookings} ({row.sharePct.toFixed(0)}%) —{" "}
-                {formatMoney(row.revenue)}
-              </li>
-            ))}
-            {overview.sources.length === 0 && <li className="text-neutral-600">—</li>}
-          </ul>
-        </div>
-        <div>
-          <h2 className="font-medium">Gastos por categoría</h2>
-          <ul className="list-disc pl-5 text-sm">
-            {overview.expenses.map((row) => (
-              <li key={row.category}>
-                {row.category}: {formatMoney(row.total)} ({row.sharePct.toFixed(0)}%)
-              </li>
-            ))}
-            {overview.expenses.length === 0 && <li className="text-neutral-600">—</li>}
-          </ul>
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="font-medium">Estados de reserva</h2>
-        <ul className="list-disc pl-5 text-sm">
-          {overview.statuses.map((row) => (
-            <li key={row.status}>
-              {row.status}: {row.count}
-            </li>
-          ))}
-        </ul>
-      </section>
+            </thead>
+            <tbody>
+              {overview.perListing.map((row) => (
+                <tr key={row.listingId}>
+                  <td className={`${td} font-medium`}>
+                    <Link
+                      href={`/admin/publicaciones?id=${row.listingId}`}
+                      className="text-accent hover:underline"
+                    >
+                      {row.title}
+                    </Link>
+                  </td>
+                  <td className={td}>{row.locationName ?? "—"}</td>
+                  <td className={`${td} w-32`}>
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-ink/[0.08]">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.max(0, Math.min(100, row.occupancyPct))}%`,
+                            background: "#2a78d6",
+                          }}
+                        />
+                      </div>
+                      <span className="tabular-nums">{pct(row.occupancyPct)}</span>
+                    </div>
+                  </td>
+                  <td className={`${td} tabular-nums`}>{row.bookingCount}</td>
+                  <td className={`${td} tabular-nums`}>{formatMoney(row.revenue)}</td>
+                  <td className={`${td} tabular-nums`}>{formatMoney(row.expenses)}</td>
+                  <td className={`${td} tabular-nums`}>{pct(row.expenseRatioPct)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      </Section>
 
       {idle.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="font-medium">Vehículos sin reservas</h2>
-          <ul className="list-disc pl-5 text-sm">
+        <Section title="Vehículos sin reservas" description="En el período seleccionado.">
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {idle.map((row) => (
-              <li key={row.listingId}>
+              <li key={row.listingId} className="rounded-md border border-ink/10 px-3 py-2 text-sm">
                 {row.title}
-                {row.car ? ` — ${row.car.make ?? ""} ${row.car.model ?? ""} ${row.car.year ?? ""}` : ""}
+                {row.car && (
+                  <span className="block text-xs text-ink/50">
+                    {row.car.make ?? ""} {row.car.model ?? ""} {row.car.year ?? ""}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
-        </section>
+        </Section>
       )}
-    </section>
+    </div>
   );
 }

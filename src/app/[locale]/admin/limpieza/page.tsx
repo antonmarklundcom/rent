@@ -7,6 +7,9 @@ import {
   setSupplyLevelAction,
 } from "@/app/actions/operations";
 import { ActionForm } from "@/components/action-form";
+import { Badge, cleaningStatusTone } from "@/components/ui/badge";
+import { fieldClass, labelClass } from "@/components/ui/field";
+import { EmptyState, PageHeader, Section, TableWrap, table, th, td } from "@/components/ui/page-header";
 import {
   cleanerJobCounts,
   listCleaners,
@@ -43,116 +46,110 @@ export default async function AdminCleaningPage({
   ]);
 
   return (
-    <section className="space-y-8">
-      <h1 className="text-2xl font-semibold">{t("cleaning")}</h1>
+    <div className="space-y-8">
+      <PageHeader title={t("cleaning")} />
 
-      <section className="space-y-2">
-        <h2 className="font-medium">
-          Roster {day ? `— ${day}` : "— todas las tareas con fecha"}
-        </h2>
-        <form className="flex items-end gap-2 text-sm">
-          <label className="space-y-1">
-            <span className="block">Día</span>
-            <input
-              type="date"
-              name="dia"
-              defaultValue={day ?? ""}
-              className="rounded border border-neutral-300 px-2 py-1"
-            />
+      <Section title={`Roster ${day ? `— ${day}` : "— todas las tareas con fecha"}`}>
+        <form className="flex flex-wrap items-end gap-2 text-sm">
+          <label className={labelClass}>
+            <span className="text-ink/70">Día</span>
+            <input type="date" name="dia" defaultValue={day ?? ""} className={fieldClass} />
           </label>
-          <button type="submit" className="rounded border border-neutral-400 px-3 py-1">
+          <button type="submit" className="rounded-sm border border-ink/20 px-3 py-2 hover:border-ink/40">
             Filtrar
           </button>
         </form>
 
         {roster.length === 0 ? (
-          <p className="text-sm text-neutral-500">No hay tareas para ese filtro.</p>
+          <EmptyState>No hay tareas para ese filtro.</EmptyState>
         ) : (
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="py-1">#</th>
-                <th>Propiedad</th>
-                <th>Estado</th>
-                <th>Para</th>
-                <th>Asignada a</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {roster.map(({ task, listingTitle, assigneeName, bookingReference }) => {
-                const next = nextCleaningStatus(task.status);
-                return (
-                  <tr key={task.id} className="border-b align-top">
-                    <td className="py-2">{task.id}</td>
-                    <td>
-                      {listingTitle}
-                      {bookingReference && (
-                        <span className="block text-xs text-neutral-500">{bookingReference}</span>
-                      )}
-                      <a
-                        href={magicLinkUrl(task.magicToken)}
-                        className="block text-xs text-blue-700 underline"
-                      >
-                        enlace del limpiador
-                      </a>
-                    </td>
-                    <td>{tStatus(task.status)}</td>
-                    <td>{task.dueBy ? new Date(task.dueBy).toISOString().slice(0, 16).replace("T", " ") : "—"}</td>
-                    <td>
-                      <ActionForm
-                        action={assignCleanerAction}
-                        submitLabel="Asignar"
-                        className="space-y-1"
-                        submitClassName="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
-                      >
-                        <input type="hidden" name="taskId" value={task.id} />
-                        <select
-                          name="assignedUserId"
-                          defaultValue={task.assignedUserId ?? ""}
-                          className="rounded border border-neutral-300 px-1 py-1"
-                        >
-                          <option value="">— sin asignar —</option>
-                          {cleaners.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                        {assigneeName && (
-                          <span className="block text-xs text-neutral-500">{assigneeName}</span>
+          <TableWrap>
+            <table className={table}>
+              <thead>
+                <tr>
+                  <th className={th}>#</th>
+                  <th className={th}>Propiedad</th>
+                  <th className={th}>Estado</th>
+                  <th className={th}>Para</th>
+                  <th className={th}>Asignada a</th>
+                  <th className={th}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roster.map(({ task, listingTitle, assigneeName, bookingReference }) => {
+                  const next = nextCleaningStatus(task.status);
+                  return (
+                    <tr key={task.id}>
+                      <td className={td}>{task.id}</td>
+                      <td className={td}>
+                        {listingTitle}
+                        {bookingReference && (
+                          <span className="block text-xs text-ink/50">{bookingReference}</span>
                         )}
-                      </ActionForm>
-                    </td>
-                    <td>
-                      {next ? (
+                        <a href={magicLinkUrl(task.magicToken)} className="block text-xs text-accent hover:underline">
+                          enlace del limpiador
+                        </a>
+                      </td>
+                      <td className={td}>
+                        <Badge tone={cleaningStatusTone(task.status)}>{tStatus(task.status)}</Badge>
+                      </td>
+                      <td className={td}>
+                        {task.dueBy ? new Date(task.dueBy).toISOString().slice(0, 16).replace("T", " ") : "—"}
+                      </td>
+                      <td className={td}>
                         <ActionForm
-                          action={advanceCleaningTaskAction}
-                          submitLabel={`→ ${tStatus(next)}`}
+                          action={assignCleanerAction}
+                          submitLabel="Asignar"
                           className="space-y-1"
-                          submitClassName="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
+                          submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-ink/40 disabled:opacity-50"
                         >
                           <input type="hidden" name="taskId" value={task.id} />
-                          <input type="hidden" name="to" value={next} />
+                          <select
+                            name="assignedUserId"
+                            defaultValue={task.assignedUserId ?? ""}
+                            className="rounded-sm border border-ink/15 px-1.5 py-1 text-xs"
+                          >
+                            <option value="">— sin asignar —</option>
+                            {cleaners.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                          {assigneeName && (
+                            <span className="block text-xs text-ink/50">{assigneeName}</span>
+                          )}
                         </ActionForm>
-                      ) : (
-                        <span className="text-xs text-neutral-500">completada</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className={td}>
+                        {next ? (
+                          <ActionForm
+                            action={advanceCleaningTaskAction}
+                            submitLabel={`→ ${tStatus(next)}`}
+                            className="space-y-1"
+                            submitClassName="rounded-sm border border-ink/20 px-2.5 py-1 text-xs hover:border-ink/40 disabled:opacity-50"
+                          >
+                            <input type="hidden" name="taskId" value={task.id} />
+                            <input type="hidden" name="to" value={next} />
+                          </ActionForm>
+                        ) : (
+                          <span className="text-xs text-ink/45">completada</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableWrap>
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Nueva tarea</h2>
+      <Section title="Nueva tarea">
         <ActionForm action={createCleaningTaskAction} submitLabel="Crear tarea">
-          <label className="block space-y-1 text-sm">
-            <span>Propiedad</span>
-            <select name="listingId" required className="w-full rounded border border-neutral-300 px-2 py-1">
+          <label className={labelClass}>
+            <span className="text-ink/70">Propiedad</span>
+            <select name="listingId" required className={fieldClass}>
               {listings.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.title}
@@ -160,9 +157,9 @@ export default async function AdminCleaningPage({
               ))}
             </select>
           </label>
-          <label className="block space-y-1 text-sm">
-            <span>Asignar a</span>
-            <select name="assignedUserId" className="w-full rounded border border-neutral-300 px-2 py-1">
+          <label className={labelClass}>
+            <span className="text-ink/70">Asignar a</span>
+            <select name="assignedUserId" className={fieldClass}>
               <option value="">— sin asignar —</option>
               {cleaners.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -171,63 +168,59 @@ export default async function AdminCleaningPage({
               ))}
             </select>
           </label>
-          <label className="block space-y-1 text-sm">
-            <span>Para (fecha y hora)</span>
-            <input type="datetime-local" name="dueBy" className="w-full rounded border border-neutral-300 px-2 py-1" />
+          <label className={labelClass}>
+            <span className="text-ink/70">Para (fecha y hora)</span>
+            <input type="datetime-local" name="dueBy" className={fieldClass} />
           </label>
-          <label className="block space-y-1 text-sm">
-            <span>Notas</span>
-            <textarea name="notes" rows={2} className="w-full rounded border border-neutral-300 px-2 py-1" />
+          <label className={labelClass}>
+            <span className="text-ink/70">Notas</span>
+            <textarea name="notes" rows={2} className={fieldClass} />
           </label>
         </ActionForm>
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Trabajos por limpiador (#13)</h2>
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b text-left">
-              <th className="py-1">Persona</th>
-              <th>Completadas</th>
-              <th>Abiertas</th>
-            </tr>
-          </thead>
-          <tbody>
-            {counts.map((row) => (
-              <tr key={row.userId} className="border-b">
-                <td className="py-1">{row.name}</td>
-                <td>{row.completed}</td>
-                <td>{row.open}</td>
+      <Section title="Trabajos por limpiador (#13)">
+        <TableWrap>
+          <table className={table}>
+            <thead>
+              <tr>
+                <th className={th}>Persona</th>
+                <th className={th}>Completadas</th>
+                <th className={th}>Abiertas</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody>
+              {counts.map((row) => (
+                <tr key={row.userId}>
+                  <td className={`${td} font-medium`}>{row.name}</td>
+                  <td className={`${td} tabular-nums`}>{row.completed}</td>
+                  <td className={`${td} tabular-nums`}>{row.open}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">{t("lowStock")} (#17)</h2>
+      <Section title={`${t("lowStock")} (#17)`}>
         {lowStock.length === 0 ? (
-          <p className="text-sm text-neutral-500">Todo el stock está por encima del mínimo.</p>
+          <p className="text-sm text-ink/50">Todo el stock está por encima del mínimo.</p>
         ) : (
-          <ul className="space-y-1 text-sm">
+          <ul className="space-y-2 text-sm">
             {lowStock.map((row) => (
-              <li key={row.levelId} className="flex items-center gap-2">
-                <span className="grow">
-                  {row.listingTitle} · {row.supplyName}: {row.qty} {row.unit} (mín. {row.lowThreshold})
+              <li key={row.levelId} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-50 px-3 py-2">
+                <span>
+                  {row.listingTitle} · {row.supplyName}:{" "}
+                  <strong>{row.qty} {row.unit}</strong> (mín. {row.lowThreshold})
                 </span>
                 <ActionForm
                   action={adjustSupplyLevelAction}
                   submitLabel="Reponer"
                   className="flex items-center gap-1"
-                  submitClassName="rounded border border-neutral-400 px-2 py-1 text-xs disabled:opacity-50"
+                  submitClassName="rounded-sm border border-ink/20 bg-surface px-2.5 py-1 text-xs hover:border-ink/40 disabled:opacity-50"
                 >
                   <input type="hidden" name="levelId" value={row.levelId} />
-                  <input
-                    type="number"
-                    name="delta"
-                    defaultValue={12}
-                    className="w-16 rounded border border-neutral-300 px-1 py-1"
-                  />
+                  <input type="number" name="delta" defaultValue={12} className="w-16 rounded-sm border border-ink/15 px-1.5 py-1 text-xs" />
                 </ActionForm>
               </li>
             ))}
@@ -235,8 +228,8 @@ export default async function AdminCleaningPage({
         )}
 
         <details>
-          <summary className="cursor-pointer text-sm">Todo el stock ({levels.length})</summary>
-          <ul className="mt-1 space-y-0.5 text-sm text-neutral-600">
+          <summary className="cursor-pointer text-sm font-medium">Todo el stock ({levels.length})</summary>
+          <ul className="mt-2 space-y-1 text-sm text-ink/60">
             {levels.map((row) => (
               <li key={row.levelId}>
                 {row.listingTitle} · {row.supplyName}: {row.qty} {row.unit} · consume{" "}
@@ -247,43 +240,45 @@ export default async function AdminCleaningPage({
         </details>
 
         <details>
-          <summary className="cursor-pointer text-sm">Cargar o actualizar un insumo</summary>
-          <ActionForm action={setSupplyLevelAction} submitLabel="Guardar insumo">
-            <label className="block space-y-1 text-sm">
-              <span>Propiedad</span>
-              <select name="listingId" required className="w-full rounded border border-neutral-300 px-2 py-1">
-                {listings.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block space-y-1 text-sm">
-              <span>Insumo</span>
-              <input name="name" required className="w-full rounded border border-neutral-300 px-2 py-1" />
-            </label>
-            <div className="grid grid-cols-4 gap-2 text-sm">
-              <label className="space-y-1">
-                <span>Unidad</span>
-                <input name="unit" defaultValue="unidad" className="w-full rounded border border-neutral-300 px-2 py-1" />
+          <summary className="cursor-pointer text-sm font-medium">Cargar o actualizar un insumo</summary>
+          <div className="mt-3">
+            <ActionForm action={setSupplyLevelAction} submitLabel="Guardar insumo">
+              <label className={labelClass}>
+                <span className="text-ink/70">Propiedad</span>
+                <select name="listingId" required className={fieldClass}>
+                  {listings.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.title}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <label className="space-y-1">
-                <span>Consumo</span>
-                <input type="number" name="consumedPerCleaning" defaultValue={0} min={0} className="w-full rounded border border-neutral-300 px-2 py-1" />
+              <label className={labelClass}>
+                <span className="text-ink/70">Insumo</span>
+                <input name="name" required className={fieldClass} />
               </label>
-              <label className="space-y-1">
-                <span>Stock</span>
-                <input type="number" name="qty" defaultValue={0} min={0} className="w-full rounded border border-neutral-300 px-2 py-1" />
-              </label>
-              <label className="space-y-1">
-                <span>Mínimo</span>
-                <input type="number" name="lowThreshold" defaultValue={0} min={0} className="w-full rounded border border-neutral-300 px-2 py-1" />
-              </label>
-            </div>
-          </ActionForm>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <label className={labelClass}>
+                  <span className="text-ink/70">Unidad</span>
+                  <input name="unit" defaultValue="unidad" className={fieldClass} />
+                </label>
+                <label className={labelClass}>
+                  <span className="text-ink/70">Consumo</span>
+                  <input type="number" name="consumedPerCleaning" defaultValue={0} min={0} className={fieldClass} />
+                </label>
+                <label className={labelClass}>
+                  <span className="text-ink/70">Stock</span>
+                  <input type="number" name="qty" defaultValue={0} min={0} className={fieldClass} />
+                </label>
+                <label className={labelClass}>
+                  <span className="text-ink/70">Mínimo</span>
+                  <input type="number" name="lowThreshold" defaultValue={0} min={0} className={fieldClass} />
+                </label>
+              </div>
+            </ActionForm>
+          </div>
         </details>
-      </section>
-    </section>
+      </Section>
+    </div>
   );
 }

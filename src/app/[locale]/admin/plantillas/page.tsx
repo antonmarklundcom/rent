@@ -1,4 +1,6 @@
 import { ActionForm } from "@/components/action-form";
+import { fieldClass, labelClass } from "@/components/ui/field";
+import { PageHeader, Section } from "@/components/ui/page-header";
 import { updateTemplateAction } from "@/app/actions/comms";
 import { listTemplates } from "@/db/queries/messages";
 import { anchorFor, isMessageEvent, placeholdersIn, TEMPLATE_PLACEHOLDERS } from "@/lib/messaging";
@@ -29,78 +31,80 @@ export default async function AdminTemplatesPage() {
   const templates = await listTemplates({ locale: "es" });
 
   return (
-    <section className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Plantillas de mensajes</h1>
-        <p className="text-sm text-neutral-600">
-          Variables disponibles:{" "}
-          {TEMPLATE_PLACEHOLDERS.map((key) => `{{${key}}}`).join(" · ")}
-        </p>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Plantillas de mensajes"
+        subtitle={`Variables disponibles: ${TEMPLATE_PLACEHOLDERS.map((key) => `{{${key}}}`).join(" · ")}`}
+      />
 
-      {templates.map((template) => {
-        const used = placeholdersIn(template.body);
-        const unknown = used.filter(
-          (key) => !(TEMPLATE_PLACEHOLDERS as readonly string[]).includes(key),
-        );
-        return (
-          <article key={template.id} className="space-y-2 border border-neutral-300 p-3">
-            <h2 className="font-medium">
-              {template.label}{" "}
-              <span className="text-xs text-neutral-500">({template.key})</span>
-            </h2>
-            <p className="text-xs text-neutral-500">
-              {isMessageEvent(template.triggerEvent)
-                ? `Se agenda ${offsetLabel(template.offsetMinutes)} de ${
-                    ANCHOR_LABEL[anchorFor(template.triggerEvent)]
-                  }`
-                : "Sin evento: no se agenda sola, es un texto para copiar"}
-              {template.vertical ? ` · sólo ${template.vertical}` : " · ambas verticales"}
-            </p>
-            {unknown.length > 0 && (
-              <p className="text-xs text-red-600">
-                Variables desconocidas (se van a renderizar vacías): {unknown.join(", ")}
-              </p>
-            )}
-            <ActionForm action={updateTemplateAction} submitLabel="Guardar plantilla">
-              <input type="hidden" name="templateId" value={template.id} />
-              <label className="flex flex-col text-sm">
-                Nombre
-                <input name="label" defaultValue={template.label} className="border p-1" />
-              </label>
-              <label className="flex flex-col text-sm">
-                Texto
-                <textarea
-                  name="body"
-                  rows={5}
-                  defaultValue={template.body}
-                  className="border p-1 font-mono"
-                />
-              </label>
-              <div className="flex flex-wrap gap-3 text-sm">
-                <label className="flex flex-col">
-                  Desfase (minutos)
-                  <input
-                    type="number"
-                    name="offsetMinutes"
-                    defaultValue={template.offsetMinutes}
-                    className="w-32 border p-1"
+      <div className="space-y-4">
+        {templates.map((template) => {
+          const used = placeholdersIn(template.body);
+          const unknown = used.filter(
+            (key) => !(TEMPLATE_PLACEHOLDERS as readonly string[]).includes(key),
+          );
+          return (
+            <Section
+              key={template.id}
+              title={template.label}
+              eyebrow={template.key}
+              description={
+                <>
+                  {isMessageEvent(template.triggerEvent)
+                    ? `Se agenda ${offsetLabel(template.offsetMinutes)} de ${
+                        ANCHOR_LABEL[anchorFor(template.triggerEvent)]
+                      }`
+                    : "Sin evento: no se agenda sola, es un texto para copiar"}
+                  {template.vertical ? ` · sólo ${template.vertical}` : " · ambas verticales"}
+                </>
+              }
+            >
+              {unknown.length > 0 && (
+                <p className="rounded-md bg-red-50 p-2 text-xs text-red-700">
+                  Variables desconocidas (se van a renderizar vacías): {unknown.join(", ")}
+                </p>
+              )}
+              <ActionForm action={updateTemplateAction} submitLabel="Guardar plantilla">
+                <input type="hidden" name="templateId" value={template.id} />
+                <label className={labelClass}>
+                  <span className="text-ink/70">Nombre</span>
+                  <input name="label" defaultValue={template.label} className={fieldClass} />
+                </label>
+                <label className={labelClass}>
+                  <span className="text-ink/70">Texto</span>
+                  <textarea
+                    name="body"
+                    rows={5}
+                    defaultValue={template.body}
+                    className={`${fieldClass} font-mono`}
                   />
                 </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="isActive"
-                    value="1"
-                    defaultChecked={template.isActive}
-                  />
-                  Activa
-                </label>
-              </div>
-            </ActionForm>
-          </article>
-        );
-      })}
-    </section>
+                <div className="flex flex-wrap items-end gap-4">
+                  <label className={labelClass}>
+                    <span className="text-ink/70">Desfase (minutos)</span>
+                    <input
+                      type="number"
+                      name="offsetMinutes"
+                      defaultValue={template.offsetMinutes}
+                      className={`${fieldClass} w-32`}
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 pb-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="isActive"
+                      value="1"
+                      defaultChecked={template.isActive}
+                      className="h-4 w-4 accent-accent"
+                    />
+                    Activa
+                  </label>
+                </div>
+              </ActionForm>
+            </Section>
+          );
+        })}
+      </div>
+    </div>
   );
 }

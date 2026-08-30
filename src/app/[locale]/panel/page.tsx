@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { createBlockAction, deleteBlockAction } from "@/app/actions/bookings";
+import { Badge, listingStatusTone, onboardingStepTone } from "@/components/ui/badge";
+import { PageHeader, Section, TableWrap, EmptyState, table, th, td } from "@/components/ui/page-header";
+import { PanelCalendar } from "@/components/ui/panel-calendar";
+import { StatRow, StatTile } from "@/components/ui/stat-tile";
 import { getOnboardingProgress } from "@/db/queries/onboarding";
 import {
   listPanelListings,
@@ -50,132 +54,134 @@ export default async function PanelPage() {
   const onboarding = user.ownerId ? await getOnboardingProgress(user.ownerId) : null;
 
   return (
-    <section className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p>{t("welcome", { name: user.name })}</p>
-      </header>
+    <div className="space-y-8">
+      <PageHeader title={t("title")} subtitle={t("welcome", { name: user.name })} />
 
-      {onboarding && (
-        <section className="space-y-1">
-          <h2 className="font-medium">
-            Onboarding — {onboarding.doneCount}/{onboarding.totalCount}
-          </h2>
-          <ul className="list-disc pl-5 text-sm">
+      {onboarding && onboarding.doneCount < onboarding.totalCount && (
+        <Section
+          eyebrow="Onboarding"
+          title={`${onboarding.doneCount} de ${onboarding.totalCount} pasos completos`}
+        >
+          <div className="h-2 w-full overflow-hidden rounded-full bg-ink/[0.08]">
+            <div
+              className="h-full rounded-full bg-accent transition-[width]"
+              style={{ width: `${(onboarding.doneCount / Math.max(1, onboarding.totalCount)) * 100}%` }}
+            />
+          </div>
+          <ul className="grid gap-2 sm:grid-cols-2">
             {onboarding.steps.map((step) => (
-              <li key={step.id}>
-                {step.status === "done" ? "✔" : step.status === "skipped" ? "—" : "○"}{" "}
-                {step.label}
+              <li key={step.id} className="flex items-center gap-2 text-sm">
+                <Badge tone={onboardingStepTone(step.status)}>
+                  {step.status === "done" ? "✔" : step.status === "skipped" ? "—" : "○"}
+                </Badge>
+                <span className={step.status === "done" ? "text-ink/60 line-through" : ""}>
+                  {step.label}
+                </span>
               </li>
             ))}
           </ul>
-        </section>
+        </Section>
       )}
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Ganancias del año</h2>
-        <ul className="list-disc pl-5 text-sm">
-          <li>Bruto (reservas completadas): {formatMoney(earnings.gross)}</li>
-          <li>Comisión: {formatMoney(earnings.commission)}</li>
-          <li>Gastos: {formatMoney(earnings.expenses)}</li>
-          <li>
-            <strong>Neto estimado: {formatMoney(earnings.net)}</strong>
-          </li>
-          <li>Por cobrar (reservas en curso): {formatMoney(earnings.pipeline)}</li>
-        </ul>
-        <p className="text-xs text-neutral-500">
+      <Section eyebrow="Este año" title="Ganancias">
+        <StatRow>
+          <StatTile label="Bruto" value={formatMoney(earnings.gross)} hint="Reservas completadas" />
+          <StatTile label="Comisión" value={`− ${formatMoney(earnings.commission)}`} />
+          <StatTile label="Gastos" value={`− ${formatMoney(earnings.expenses)}`} />
+          <StatTile label="Neto estimado" value={formatMoney(earnings.net)} />
+          <StatTile label="Por cobrar" value={formatMoney(earnings.pipeline)} hint="Reservas en curso" />
+        </StatRow>
+        <p className="text-xs text-ink/50">
           El estado mensual es el documento oficial; esto es la vista en curso.
         </p>
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">{t("listings")}</h2>
+      <Section title={t("listings")}>
         {listings.length === 0 ? (
-          <p className="text-neutral-600">{t("noListings")}</p>
+          <EmptyState>{t("noListings")}</EmptyState>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="py-1">Título</th>
-                <th>Vertical</th>
-                <th>{t("status")}</th>
-                <th>Precio</th>
-                <th>Fotos</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {listings.map((row) => (
-                <tr key={row.id} className="border-b">
-                  <td className="py-1">{row.title}</td>
-                  <td>{row.vertical}</td>
-                  <td>{tStatus(row.status)}</td>
-                  <td>{formatMoney(row.price, row.currency)}</td>
-                  <td>{row.imageCount}</td>
-                  <td>
-                    <Link
-                      href={`/panel/publicaciones/${row.id}`}
-                      className="text-blue-700 underline"
-                    >
-                      Editar
-                    </Link>
-                  </td>
+          <TableWrap>
+            <table className={table}>
+              <thead>
+                <tr>
+                  <th className={th}>Título</th>
+                  <th className={th}>Vertical</th>
+                  <th className={th}>{t("status")}</th>
+                  <th className={th}>Precio</th>
+                  <th className={th}>Fotos</th>
+                  <th className={th} />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {listings.map((row) => (
+                  <tr key={row.id}>
+                    <td className={`${td} font-medium`}>{row.title}</td>
+                    <td className={td}>{row.vertical === "stay" ? "Alojamiento" : "Auto"}</td>
+                    <td className={td}>
+                      <Badge tone={listingStatusTone(row.status)}>{tStatus(row.status)}</Badge>
+                    </td>
+                    <td className={`${td} tabular-nums`}>{formatMoney(row.price, row.currency)}</td>
+                    <td className={td}>{row.imageCount}</td>
+                    <td className={td}>
+                      <Link href={`/panel/publicaciones/${row.id}`} className="font-medium text-accent hover:underline">
+                        Editar
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Próximas reservas</h2>
+      <Section title="Próximas reservas">
         {upcoming.length === 0 ? (
-          <p className="text-sm text-neutral-600">No hay reservas próximas.</p>
+          <EmptyState>No hay reservas próximas.</EmptyState>
         ) : (
-          <ul className="list-disc pl-5 text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {upcoming.map(({ booking, listingTitle }) => (
-              <li key={booking.id}>
-                {booking.reference} · {listingTitle} · {booking.guestName} ·{" "}
-                {booking.startAt.toISOString().slice(0, 10)} →{" "}
-                {booking.endAt.toISOString().slice(0, 10)} · {booking.status} ·{" "}
-                {formatMoney(booking.total, booking.currency)}
+              <li key={booking.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span>
+                  <span className="font-medium">{booking.reference}</span> · {listingTitle} ·{" "}
+                  {booking.guestName}
+                  <span className="block text-xs text-ink/50 sm:inline sm:before:content-['_·_']">
+                    {booking.startAt.toISOString().slice(0, 10)} →{" "}
+                    {booking.endAt.toISOString().slice(0, 10)}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2 tabular-nums">
+                  {formatMoney(booking.total, booking.currency)}
+                </span>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Calendario (120 días)</h2>
+      <Section title="Calendario" description="Próximos 120 días — reservas y bloqueos por publicación.">
         {calendar.length === 0 ? (
-          <p className="text-sm text-neutral-600">Sin ocupación cargada.</p>
+          <EmptyState>Sin ocupación cargada.</EmptyState>
         ) : (
-          <ul className="text-sm">
-            {calendar.map((entry) => (
-              <li key={`${entry.kind}-${entry.id}`} className="border-b py-1">
-                {entry.startAt.toISOString().slice(0, 10)} →{" "}
-                {entry.endAt.toISOString().slice(0, 10)} · {entry.listingTitle} ·{" "}
-                {entry.kind === "booking" ? "Reserva" : "Bloqueo"} — {entry.label} (
-                {entry.status})
-              </li>
-            ))}
-          </ul>
+          <PanelCalendar entries={calendar} window={window} />
         )}
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Bloquear fechas (#15)</h2>
+      <Section title="Bloquear fechas (#15)" description="Reservá tus propias fechas o bloqueá por mantenimiento.">
         <BlockDatesForm
           listings={listings.map((row) => ({ id: row.id, title: row.title }))}
           action={createBlockAction}
         />
         {blocks.length > 0 && (
-          <ul className="text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {blocks.map(({ block, listingTitle }) => (
-              <li key={block.id} className="flex items-center gap-2 border-b py-1">
+              <li key={block.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span>
-                  {listingTitle}: {block.startAt.toISOString().slice(0, 10)} →{" "}
-                  {block.endAt.toISOString().slice(0, 10)} ({block.reason})
+                  <span className="font-medium">{listingTitle}</span>:{" "}
+                  {block.startAt.toISOString().slice(0, 10)} → {block.endAt.toISOString().slice(0, 10)}{" "}
+                  <span className="text-ink/50">
+                    ({block.reason === "owner_use" ? "uso propio" : block.reason === "maintenance" ? "mantenimiento" : "iCal"})
+                  </span>
                 </span>
                 {block.reason !== "external_ical" && (
                   <DeleteBlockButton blockId={block.id} action={deleteBlockAction} />
@@ -184,31 +190,35 @@ export default async function PanelPage() {
             ))}
           </ul>
         )}
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-ink/50">
           Los bloqueos importados por iCal se administran desde el calendario externo.
         </p>
-      </section>
+      </Section>
 
-      <section className="space-y-2">
-        <h2 className="font-medium">Estados de cuenta</h2>
+      <Section title="Estados de cuenta">
         {statements.length === 0 ? (
-          <p className="text-sm text-neutral-600">Todavía no hay estados generados.</p>
+          <EmptyState>Todavía no hay estados generados.</EmptyState>
         ) : (
-          <ul className="list-disc pl-5 text-sm">
+          <ul className="divide-y divide-ink/8 text-sm">
             {statements.map((statement) => (
-              <li key={statement.id}>
-                {statement.period} — neto {formatMoney(statement.netTotal, statement.currency)}{" "}
+              <li key={statement.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span>
+                  <span className="font-medium">{statement.period}</span> — neto{" "}
+                  {formatMoney(statement.netTotal, statement.currency)}
+                </span>
                 <a
-                  className="text-blue-700 underline"
+                  className="font-medium text-accent hover:underline"
                   href={`/api/estados/${statement.id}.html`}
+                  target="_blank"
+                  rel="noopener"
                 >
-                  ver
+                  Ver estado →
                 </a>
               </li>
             ))}
           </ul>
         )}
-      </section>
-    </section>
+      </Section>
+    </div>
   );
 }

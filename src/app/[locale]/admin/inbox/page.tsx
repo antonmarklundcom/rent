@@ -1,4 +1,5 @@
 import { Link } from "@/i18n/navigation";
+import { PageHeader } from "@/components/ui/page-header";
 import { listInboxThreads, listThreadMessages } from "@/db/queries/messages";
 import { isDraftingConfigured } from "@/lib/ai-draft";
 import { requireAdminPage } from "@/lib/page-guards";
@@ -36,43 +37,40 @@ export default async function AdminInboxPage({
     : [];
 
   return (
-    <section className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">Bandeja unificada</h1>
-        <p className="text-sm text-neutral-600">
-          {threads.filter((thread) => thread.awaitingReply).length} conversación(es) esperando
-          respuesta.
-        </p>
-        {!isDraftingConfigured() && (
-          <p className="text-sm text-amber-700">
-            El borrador automático está desactivado: falta ANTHROPIC_API_KEY.
-          </p>
-        )}
-      </header>
-
-      <div className="grid gap-6 md:grid-cols-[1fr_2fr]">
-        <section className="space-y-1">
-          <h2 className="font-medium">Conversaciones</h2>
-          <ul className="text-sm">
-            {threads.length === 0 && (
-              <li className="text-neutral-600">Todavía no hay mensajes registrados.</li>
+    <div className="space-y-6">
+      <PageHeader
+        title="Bandeja unificada"
+        subtitle={
+          <>
+            {threads.filter((thread) => thread.awaitingReply).length} conversación(es) esperando
+            respuesta.
+            {!isDraftingConfigured() && (
+              <span className="mt-1 block text-amber-700">
+                El borrador automático está desactivado: falta ANTHROPIC_API_KEY.
+              </span>
             )}
+          </>
+        }
+      />
+
+      <div className="grid gap-6 md:grid-cols-[20rem_1fr]">
+        <section className="card--raised card--hair max-h-[70vh] overflow-y-auto rounded-lg">
+          {threads.length === 0 && (
+            <p className="p-4 text-sm text-ink/50">Todavía no hay mensajes registrados.</p>
+          )}
+          <ul className="divide-y divide-ink/8 text-sm">
             {threads.map((thread) => (
-              <li
-                key={thread.key}
-                className={`border-b py-2 ${thread.key === openKey ? "bg-neutral-100" : ""}`}
-              >
-                <a href={`?hilo=${encodeURIComponent(thread.key)}`} className="block">
-                  <span className="font-medium">
-                    {thread.awaitingReply ? "● " : ""}
+              <li key={thread.key} className={thread.key === openKey ? "bg-accent/[0.06]" : ""}>
+                <a href={`?hilo=${encodeURIComponent(thread.key)}`} className="block px-4 py-3">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    {thread.awaitingReply && <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />}
                     {thread.contactName ?? "Sin nombre"}
                   </span>
-                  <span className="block text-xs text-neutral-500">
+                  <span className="block text-xs text-ink/50">
                     {thread.reference ? `${thread.reference} · ` : ""}
-                    {thread.listingTitle ?? "Sin publicación"} · {when(thread.lastAt)} ·{" "}
-                    {thread.total} mensaje(s)
+                    {thread.listingTitle ?? "Sin publicación"} · {when(thread.lastAt)}
                   </span>
-                  <span className="block truncate text-neutral-700">{thread.lastBody}</span>
+                  <span className="mt-0.5 block truncate text-ink/70">{thread.lastBody}</span>
                 </a>
               </li>
             ))}
@@ -81,34 +79,32 @@ export default async function AdminInboxPage({
 
         <section className="space-y-3">
           {!open ? (
-            <p className="text-sm text-neutral-600">Elegí una conversación.</p>
+            <p className="text-sm text-ink/50">Elegí una conversación.</p>
           ) : (
             <>
-              <h2 className="font-medium">
+              <h2 className="text-lg font-medium">
                 {open.contactName ?? "Conversación"}
                 {open.bookingId && (
                   <>
                     {" · "}
-                    <Link
-                      href={`/admin/reservas/${open.bookingId}`}
-                      className="text-blue-700 underline"
-                    >
+                    <Link href={`/admin/reservas/${open.bookingId}`} className="text-accent hover:underline">
                       {open.reference}
                     </Link>
                   </>
                 )}
               </h2>
-              <ul className="space-y-2 text-sm">
+              <ul className="max-h-[45vh] space-y-2 overflow-y-auto text-sm">
                 {messages.map((message) => (
                   <li
                     key={message.id}
-                    className={`border p-2 ${
-                      message.direction === "inbound" ? "bg-neutral-50" : "bg-white"
+                    className={`max-w-[85%] rounded-md p-3 ${
+                      message.direction === "inbound"
+                        ? "bg-ink/[0.04]"
+                        : "ml-auto bg-accent/10"
                     }`}
                   >
-                    <p className="text-xs text-neutral-500">
-                      {message.direction === "inbound" ? "Huésped" : "Nosotros"} ·{" "}
-                      {when(message.createdAt)}
+                    <p className="text-xs text-ink/50">
+                      {message.direction === "inbound" ? "Huésped" : "Nosotros"} · {when(message.createdAt)}
                       {message.aiDrafted ? " · borrador IA aprobado" : ""}
                     </p>
                     <p className="whitespace-pre-wrap">{message.body}</p>
@@ -127,6 +123,6 @@ export default async function AdminInboxPage({
           )}
         </section>
       </div>
-    </section>
+    </div>
   );
 }
