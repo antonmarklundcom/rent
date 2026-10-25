@@ -83,6 +83,14 @@ import {
   unfoldLines,
 } from "../src/lib/ical";
 import { addMoney, toMoney } from "../src/lib/money";
+import {
+  isLoginBlocked,
+  LOGIN_MAX_FAILURES,
+  LOGIN_WINDOW_MS,
+  loginKey,
+  recordLoginFailure,
+  resetLoginFailures,
+} from "../src/lib/login-throttle";
 import { occupiedMillis } from "../src/db/queries/availability";
 
 const r = new CheckRunner();
@@ -768,5 +776,23 @@ r.equal(
 );
 r.equal("una cookie rota no rompe nada", Object.keys(readAttribution("{no-json")).length, 0);
 r.equal("una cookie ausente tampoco", Object.keys(readAttribution(undefined)).length, 0);
+
+r.section("Límite de intentos de login (por cuenta)");
+{
+  const t0 = 1_000_000;
+  const a = loginKey("  Ana@Example.com ");
+  r.equal("el email se normaliza", a, "ana@example.com");
+  for (let i = 0; i < LOGIN_MAX_FAILURES - 1; i++) recordLoginFailure(a, t0);
+  r.check("antes del máximo todavía puede entrar", !isLoginBlocked(a, t0));
+  recordLoginFailure(a, t0);
+  r.check("tras N fallos queda bloqueada (aunque la clave sea la correcta)", isLoginBlocked(a, t0 + 1000));
+  r.check("otra cuenta es independiente", !isLoginBlocked(loginKey("otra@example.com"), t0 + 1000));
+  r.check("el bloqueo vence con la ventana", !isLoginBlocked(a, t0 + LOGIN_WINDOW_MS + 1));
+  const b = loginKey("beto@example.com");
+  for (let i = 0; i < LOGIN_MAX_FAILURES - 1; i++) recordLoginFailure(b, t0);
+  resetLoginFailures(b);
+  recordLoginFailure(b, t0);
+  r.check("un login correcto reinicia el contador", !isLoginBlocked(b, t0));
+}
 
 process.exitCode = r.summary("verificaciones de lógica pasaron") ? 1 : 0;

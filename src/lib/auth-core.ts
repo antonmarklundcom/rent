@@ -7,6 +7,12 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { owners, users, type UserRole } from "@/db/schema";
+import {
+  isLoginBlocked,
+  loginKey,
+  recordLoginFailure,
+  resetLoginFailures,
+} from "@/lib/login-throttle";
 
 export class AuthError extends Error {
   constructor(
@@ -94,17 +100,30 @@ export async function authenticate(
   password: string,
 ): Promise<SessionUser> {
   const normalised = email.trim().toLowerCase();
-  const [row] = await db.select().from(users).where(eq(users.email, normalised)).limit(1);
-
+  const key = loginKey(normalised);
   const invalid = new AuthError("Email o contraseña incorrectos", "invalid_credentials");
-  if (!row || !row.isActive || !row.passwordHash || row.role === "cleaner") {
+
+  // Demasiados fallos en esta cuenta: mismo error genérico, ni siquiera con la clave correcta.
+  if (isLoginBlocked(key)) {
     await bcrypt.compare(password, DUMMY_HASH);
     throw invalid;
   }
-  if (!(await verifyPassword(password, row.passwordHash))) throw invalid;
+
+  const [row] = await db.select().from(users).where(eq(users.email, normalised)).limit(1);
+
+  if (!row || !row.isActive || !row.passwordHash || row.role === "cleaner") {
+    await bcrypt.compare(password, DUMMY_HASH);
+    recordLoginFailure(key);
+    throw invalid;
+  }
+  if (!(await verifyPassword(password, row.passwordHash))) {
+    recordLoginFailure(key);
+    throw invalid;
+  }
 
   const sessionUser = await buildSessionUser(row.id);
   if (!sessionUser) throw invalid;
+  resetLoginFailures(key);
   return sessionUser;
 }
 
